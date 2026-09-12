@@ -1,8 +1,22 @@
 {
   "app": {
+    "[project]/app/image-tools/page": [
+      "static/media/83afe278b6a6bb3c-s.p.2bn3s6zvc0dyp.woff2"
+    ],
     "[project]/app/page": [
-      "static/media/caa3a2e1cccd8315-s.p.0wgildi0cnwt9.woff2",
-      "static/media/797e433ab948586e-s.p.0r6juujl39pe6.woff2"
+      "static/media/83afe278b6a6bb3c-s.p.2bn3s6zvc0dyp.woff2"
+    ],
+    "[project]/app/pricing/page": [
+      "static/media/83afe278b6a6bb3c-s.p.2bn3s6zvc0dyp.woff2"
+    ],
+    "[project]/app/signup/page": [
+      "static/media/83afe278b6a6bb3c-s.p.2bn3s6zvc0dyp.woff2"
+    ],
+    "[project]/app/tools/[toolSlug]/page": [
+      "static/media/83afe278b6a6bb3c-s.p.2bn3s6zvc0dyp.woff2"
+    ],
+    "[project]/app/tools/page": [
+      "static/media/83afe278b6a6bb3c-s.p.2bn3s6zvc0dyp.woff2"
     ]
   },
   "appUsingSizeAdjust": true,
