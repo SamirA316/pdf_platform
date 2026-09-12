@@ -45,7 +45,7 @@ export function MergeConfig({ files, onProcess, onAddMore, onRemoveFile }: Merge
         <Button variant="outline" size="lg" onClick={onAddMore} className="rounded-full flex-1">
           <Plus className="w-4 h-4 mr-2" /> Add More Files
         </Button>
-        <Button size="lg" onClick={onProcess} className="rounded-full flex-1 shadow-sm" disabled={files.length < 2}>
+        <Button size="lg" onClick={() => onProcess()} className="rounded-full flex-1 shadow-sm" disabled={files.length < 2}>
           Merge {files.length} Files
         </Button>
       </div>
