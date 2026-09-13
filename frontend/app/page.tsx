@@ -1,281 +1,244 @@
+"use client";
+
+import { useState } from "react";
 import { Navbar } from "@/components/shared/Navbar";
 import { Footer } from "@/components/shared/Footer";
-import { UploadDropzone } from "@/components/shared/UploadDropzone";
 import { ToolCard } from "@/components/shared/ToolCard";
 import { Button } from "@/components/ui/button";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { 
-  FileText, Image as ImageIcon, Wand2, Scissors, 
-  Combine, ArrowRightLeft, Shrink, Type, Sparkles,
-  ShieldCheck, Zap, Trash2, UserX, CheckCircle2, Search
+import {
+  Monitor, Smartphone, Briefcase, CheckCircle2, Crown, Image as ImageIcon
 } from "lucide-react";
 import Link from "next/link";
+import { getToolsByFilter } from "@/config/tools";
+
+const filters = ['All', 'Workflows', 'Organize PDF', 'Optimize PDF', 'Convert PDF', 'Edit PDF', 'PDF Security', 'PDF Intelligence'];
 
 export default function Home() {
+  const [activeFilter, setActiveFilter] = useState('All');
+
+  const filteredTools = getToolsByFilter(activeFilter);
+
   return (
-    <div className="flex flex-col min-h-screen">
+    <div className="flex flex-col min-h-screen bg-[#FDFDFD] font-sans">
+      {/* Decorative Background blob */}
+      <div className="absolute top-0 right-0 w-full h-[600px] bg-gradient-to-b from-[#FFF0F0] to-transparent -z-10 opacity-60 pointer-events-none" />
+
       <Navbar />
-      
+
       <main className="flex-1">
         {/* HERO SECTION */}
-        <section className="pt-24 pb-16 px-4 sm:px-6 lg:px-8 text-center max-w-7xl mx-auto">
-          <h1 className="text-4xl md:text-6xl font-bold tracking-tight text-foreground mb-6 max-w-4xl mx-auto">
-            Everything you need to work with PDFs and images.
+        <section className="pt-12 pb-6 px-4 sm:px-6 lg:px-8 text-center max-w-5xl mx-auto">
+          <h1 className="text-4xl md:text-[52px] font-bold tracking-tight text-[#33333B] mb-4 leading-tight">
+            The Ultimate PDF Toolkit for all your document needs
           </h1>
-          <p className="text-lg md:text-xl text-muted-foreground mb-12 max-w-2xl mx-auto">
-            Compress, convert, merge, resize, edit and transform your files in seconds — fast, simple and secure.
+          <p className="text-lg md:text-xl text-[#4A4A55] mb-8 max-w-3xl mx-auto font-medium">
+            Manage, edit, and transform your PDFs instantly. Fast, secure, and incredibly simple to use. Merge, compress, convert, and sign your documents without any hassle.
           </p>
-          
-          <UploadDropzone />
-          
-          <div className="mt-8 flex items-center justify-center gap-4">
-            <Link href="#tools">
-              <Button variant="outline" size="lg" className="rounded-full px-8 font-medium border-border">
-                Explore Tools
-              </Button>
-            </Link>
-          </div>
+
         </section>
 
-        {/* TRUST / VALUE STRIP */}
-        <section className="py-12 border-y border-border bg-secondary/30">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
-              <div className="flex flex-col items-center justify-center space-y-2">
-                <ShieldCheck className="w-8 h-8 text-primary" strokeWidth={1.5} />
-                <span className="font-medium text-foreground">Secure processing</span>
-              </div>
-              <div className="flex flex-col items-center justify-center space-y-2">
-                <Zap className="w-8 h-8 text-primary" strokeWidth={1.5} />
-                <span className="font-medium text-foreground">Lightning fast</span>
-              </div>
-              <div className="flex flex-col items-center justify-center space-y-2">
-                <Trash2 className="w-8 h-8 text-primary" strokeWidth={1.5} />
-                <span className="font-medium text-foreground">Auto-deleted files</span>
-              </div>
-              <div className="flex flex-col items-center justify-center space-y-2">
-                <UserX className="w-8 h-8 text-primary" strokeWidth={1.5} />
-                <span className="font-medium text-foreground">No registration</span>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* POPULAR TOOLS */}
-        <section id="tools" className="py-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
-          <div className="mb-12 text-center">
-            <h2 className="text-3xl font-bold tracking-tight text-foreground mb-4">Popular Tools</h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto">Our most frequently used utilities by students and professionals.</p>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <ToolCard 
-              title="Compress PDF" 
-              description="Reduce file size while optimizing for maximal PDF quality."
-              icon={Shrink}
-              href="/tools/compress-pdf"
-            />
-            <ToolCard 
-              title="Merge PDF" 
-              description="Combine multiple PDFs into one unified document."
-              icon={Combine}
-              href="/tools/merge-pdf"
-            />
-            <ToolCard 
-              title="PDF to Word" 
-              description="Easily convert your PDF files into easy to edit DOC and DOCX."
-              icon={ArrowRightLeft}
-              href="/tools/pdf-to-word"
-            />
-            <ToolCard 
-              title="Passport Photo" 
-              description="Create a standard size passport photo and print sheet instantly."
-              icon={ImageIcon}
-              href="/tools/passport-photo"
-              accent
-            />
-          </div>
-        </section>
-
-        {/* PDF TOOLS SECTION */}
-        <section className="py-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto bg-secondary/20 rounded-3xl mb-12">
-          <div className="mb-12">
-            <h2 className="text-3xl font-bold tracking-tight text-foreground mb-4">Powerful PDF tools, made simple.</h2>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <ToolCard title="Split PDF" description="Separate one page or a whole set for easy conversion into independent PDF files." icon={Scissors} href="/tools/split-pdf" />
-            <ToolCard title="PDF to JPG" description="Convert each PDF page into a JPG or extract all images contained in a PDF." icon={ImageIcon} href="/tools/pdf-to-jpg" />
-            <ToolCard title="JPG to PDF" description="Adjust orientation and margins." icon={FileText} href="/tools/jpg-to-pdf" />
-            <ToolCard title="PDF Editor" description="Add text, images, shapes or freehand annotations to a PDF document." icon={Type} href="/tools/edit-pdf" />
-          </div>
-        </section>
-
-        {/* AI TOOLS SECTION */}
-        <section className="py-24 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
-          <div className="absolute inset-0 bg-primary/5 -z-10" />
-          <div className="max-w-7xl mx-auto text-center mb-16">
-            <div className="inline-flex items-center justify-center p-2 bg-primary/10 rounded-full mb-6 text-primary">
-              <Sparkles className="w-5 h-5 mr-2" />
-              <span className="font-semibold text-sm pr-2">Premium Features</span>
-            </div>
-            <h2 className="text-4xl font-bold tracking-tight text-foreground mb-6">Work smarter with AI.</h2>
-            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Unlock advanced document understanding. Summarize, extract, and chat with your files.
-            </p>
-          </div>
-          
-          <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8">
-            <Link href="/tools/ai-summary" className="bg-card border border-border p-8 rounded-2xl shadow-sm text-center hover:border-primary/50 hover:shadow-md transition-all group block">
-              <Search className="w-10 h-10 text-primary mx-auto mb-4 group-hover:scale-110 transition-transform" strokeWidth={1.5} />
-              <h3 className="text-xl font-semibold mb-2 text-foreground">AI Summary</h3>
-              <p className="text-muted-foreground text-sm">Instantly summarize 100-page reports into bullet points.</p>
-            </Link>
-            <Link href="/tools/chat-pdf" className="bg-card border border-border p-8 rounded-2xl shadow-sm text-center relative overflow-hidden hover:border-primary/50 hover:shadow-md transition-all group block">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 rounded-full blur-3xl -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-500" />
-              <Wand2 className="w-10 h-10 text-primary mx-auto mb-4 group-hover:scale-110 transition-transform" strokeWidth={1.5} />
-              <h3 className="text-xl font-semibold mb-2 text-foreground">Chat with PDF</h3>
-              <p className="text-muted-foreground text-sm">Ask questions and get answers directly from your document.</p>
-            </Link>
-            <Link href="/tools/extract-data" className="bg-card border border-border p-8 rounded-2xl shadow-sm text-center hover:border-primary/50 hover:shadow-md transition-all group block">
-              <FileText className="w-10 h-10 text-primary mx-auto mb-4 group-hover:scale-110 transition-transform" strokeWidth={1.5} />
-              <h3 className="text-xl font-semibold mb-2 text-foreground">Extract Data</h3>
-              <p className="text-muted-foreground text-sm">Pull structured data like tables and names automatically.</p>
-            </Link>
-          </div>
-        </section>
-
-        {/* HOW IT WORKS */}
-        <section className="py-24 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto text-center">
-          <h2 className="text-3xl font-bold tracking-tight text-foreground mb-16">How it works</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-12 relative">
-            <div className="hidden md:block absolute top-1/2 left-1/6 right-1/6 h-0.5 bg-border -z-10 -translate-y-1/2" />
-            <div className="flex flex-col items-center bg-background">
-              <div className="w-12 h-12 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold text-xl mb-6 shadow-md z-10">1</div>
-              <h3 className="text-xl font-semibold mb-2">Upload your file</h3>
-              <p className="text-muted-foreground text-sm">Drag and drop or select your document safely.</p>
-            </div>
-            <div className="flex flex-col items-center bg-background">
-              <div className="w-12 h-12 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold text-xl mb-6 shadow-md z-10">2</div>
-              <h3 className="text-xl font-semibold mb-2">Choose a tool</h3>
-              <p className="text-muted-foreground text-sm">Select the exact operation you need performed.</p>
-            </div>
-            <div className="flex flex-col items-center bg-background">
-              <div className="w-12 h-12 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold text-xl mb-6 shadow-md z-10">3</div>
-              <h3 className="text-xl font-semibold mb-2">Download your result</h3>
-              <p className="text-muted-foreground text-sm">Get your processed file in seconds.</p>
-            </div>
-          </div>
-        </section>
-
-        {/* WHY CHOOSE US */}
-        <section className="py-24 px-4 sm:px-6 lg:px-8 bg-secondary/50 border-y border-border">
-          <div className="max-w-7xl mx-auto">
-            <div className="text-center mb-16">
-              <h2 className="text-3xl font-bold tracking-tight text-foreground mb-4">Why Choose Us</h2>
-              <p className="text-muted-foreground max-w-2xl mx-auto">Built from the ground up for speed, privacy, and simplicity.</p>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-              {[
-                { title: 'Fast', desc: 'Process everyday files quickly without waiting.' },
-                { title: 'Simple', desc: 'No complicated settings or frustrating workflows.' },
-                { title: 'Private', desc: 'Files are processed securely and removed automatically.' },
-                { title: 'Affordable', desc: 'Generous free usage and affordable Pro plans.' }
-              ].map((feature, i) => (
-                <div key={i} className="bg-background p-6 rounded-2xl border border-border shadow-sm">
-                  <CheckCircle2 className="w-8 h-8 text-primary mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">{feature.title}</h3>
-                  <p className="text-muted-foreground text-sm">{feature.desc}</p>
-                </div>
+        {/* Filters */}
+        <section id="tools" className="px-4 sm:px-6 lg:px-8 max-w-[1400px] mx-auto w-full mb-6">
+          <div className="flex justify-start md:justify-center w-full">
+            <div className="flex overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] gap-2 pb-2 w-full md:w-max md:max-w-full">
+              {filters.map((filter) => (
+                <button
+                  key={filter}
+                  onClick={() => setActiveFilter(filter)}
+                  className={`px-5 py-2 rounded-full text-sm font-semibold transition-colors shrink-0 whitespace-nowrap ${activeFilter === filter
+                    ? 'bg-[#33333B] text-white'
+                    : 'bg-white text-[#4A4A55] border border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                    }`}
+                >
+                  {filter}
+                </button>
               ))}
             </div>
           </div>
         </section>
 
-        {/* PRICING */}
-        <section className="py-24 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto text-center">
-          <h2 className="text-3xl font-bold tracking-tight text-foreground mb-16">Simple pricing</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto text-left">
-            {/* Free Plan */}
-            <div className="bg-card border border-border p-8 rounded-3xl shadow-sm flex flex-col">
-              <h3 className="text-xl font-semibold mb-2">Free</h3>
-              <div className="text-4xl font-bold mb-6">₹0<span className="text-lg text-muted-foreground font-normal">/mo</span></div>
-              <ul className="space-y-4 mb-8 flex-1 text-muted-foreground text-sm">
-                <li className="flex items-center"><CheckCircle2 className="w-4 h-4 mr-2 text-primary" /> Basic tools</li>
-                <li className="flex items-center"><CheckCircle2 className="w-4 h-4 mr-2 text-primary" /> Limited daily usage</li>
-                <li className="flex items-center"><CheckCircle2 className="w-4 h-4 mr-2 text-primary" /> Standard processing</li>
-              </ul>
-              <Button variant="outline" className="w-full rounded-full border-border">Get Started</Button>
+        {/* TOOLS GRID */}
+        <section className="pb-12 px-4 sm:px-6 lg:px-8 max-w-[1400px] mx-auto min-h-[500px]">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+            {filteredTools.map((tool) => (
+              <ToolCard
+                key={tool.title}
+                title={tool.title}
+                description={tool.description}
+                icon={tool.icon}
+                href={`/tools/${tool.slug}`}
+                color={tool.color}
+                bgColor={tool.bgColor}
+                badge={tool.badge}
+              />
+            ))}
+          </div>
+          {filteredTools.length === 0 && (
+            <div className="text-center py-20 text-gray-500">
+              No tools found in this category.
             </div>
-            {/* Pro Plan */}
-            <div className="bg-primary/5 border-2 border-primary p-8 rounded-3xl shadow-md flex flex-col relative">
-              <div className="absolute top-0 right-8 -translate-y-1/2 bg-primary text-primary-foreground px-3 py-1 text-xs font-bold rounded-full">RECOMMENDED</div>
-              <h3 className="text-xl font-semibold mb-2">Pro</h3>
-              <div className="text-4xl font-bold mb-6">₹199<span className="text-lg text-muted-foreground font-normal">/mo</span></div>
-              <ul className="space-y-4 mb-8 flex-1 text-foreground text-sm font-medium">
-                <li className="flex items-center"><CheckCircle2 className="w-4 h-4 mr-2 text-primary" /> Higher limits</li>
-                <li className="flex items-center"><CheckCircle2 className="w-4 h-4 mr-2 text-primary" /> Batch processing</li>
-                <li className="flex items-center"><CheckCircle2 className="w-4 h-4 mr-2 text-primary" /> Faster processing</li>
-                <li className="flex items-center"><CheckCircle2 className="w-4 h-4 mr-2 text-primary" /> No ads</li>
-              </ul>
-              <Button className="w-full rounded-full">Upgrade to Pro</Button>
+          )}
+        </section>
+
+        {/* WORK YOUR WAY SECTION */}
+        <section className="py-12 px-4 sm:px-6 lg:px-8 text-center bg-[#FAFAFA] border-t border-gray-100">
+          <h2 className="text-4xl font-bold tracking-tight text-[#33333B] mb-10">Work your way</h2>
+
+          <div className="max-w-[1200px] mx-auto grid grid-cols-1 md:grid-cols-3 gap-8 text-left">
+            {/* Desktop */}
+            <div className="bg-white rounded-3xl overflow-hidden shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-gray-100 flex flex-col hover:-translate-y-1 transition-transform duration-300">
+              <div className="h-48 bg-[#FDEFEF] relative overflow-hidden flex items-end justify-center pt-8 px-8">
+                <div className="bg-white w-full h-full rounded-t-lg shadow-sm border border-b-0 border-gray-200 flex items-center justify-center">
+                  <Monitor className="w-16 h-16 text-red-300" strokeWidth={1} />
+                </div>
+              </div>
+              <div className="p-8 flex-1 flex flex-col">
+                <h3 className="text-xl font-bold mb-3 text-[#33333B]">Seamless Desktop App</h3>
+                <p className="text-[#4A4A55] mb-6 flex-1 text-sm leading-relaxed">
+                  Process files directly on your computer. Enjoy unlimited batch processing without needing an internet connection.
+                </p>
+                <Link href="/desktop" className="self-end text-[#33333B] hover:text-red-500 transition-colors">
+                  <span className="sr-only">Go to Desktop</span>
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="7" y1="17" x2="17" y2="7"></line><polyline points="7 7 17 7 17 17"></polyline></svg>
+                </Link>
+              </div>
             </div>
-            {/* AI Pro Plan */}
-            <div className="bg-card border border-border p-8 rounded-3xl shadow-sm flex flex-col">
-              <h3 className="text-xl font-semibold mb-2">AI Pro</h3>
-              <div className="text-4xl font-bold mb-6">₹399<span className="text-lg text-muted-foreground font-normal">/mo</span></div>
-              <ul className="space-y-4 mb-8 flex-1 text-muted-foreground text-sm">
-                <li className="flex items-center"><CheckCircle2 className="w-4 h-4 mr-2 text-primary" /> All Pro features</li>
-                <li className="flex items-center"><CheckCircle2 className="w-4 h-4 mr-2 text-primary" /> AI PDF features</li>
-                <li className="flex items-center"><CheckCircle2 className="w-4 h-4 mr-2 text-primary" /> High AI limits</li>
-                <li className="flex items-center"><CheckCircle2 className="w-4 h-4 mr-2 text-primary" /> Advanced document tools</li>
-              </ul>
-              <Button variant="outline" className="w-full rounded-full border-border">Get AI Pro</Button>
+
+            {/* Mobile */}
+            <div className="bg-white rounded-3xl overflow-hidden shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-gray-100 flex flex-col hover:-translate-y-1 transition-transform duration-300">
+              <div className="h-48 bg-[#FDEFEF] relative overflow-hidden flex items-end justify-center pt-8 px-16">
+                <div className="bg-white w-full h-full rounded-t-3xl shadow-sm border border-b-0 border-gray-200 flex items-center justify-center">
+                  <Smartphone className="w-16 h-16 text-red-300" strokeWidth={1} />
+                </div>
+              </div>
+              <div className="p-8 flex-1 flex flex-col">
+                <h3 className="text-xl font-bold mb-3 text-[#33333B]">Powerful Mobile Experience</h3>
+                <p className="text-[#4A4A55] mb-6 flex-1 text-sm leading-relaxed">
+                  Edit and convert documents right from your smartphone. Your essential PDF toolkit travels with you.
+                </p>
+                <Link href="/mobile" className="self-end text-[#33333B] hover:text-red-500 transition-colors">
+                  <span className="sr-only">Go to Mobile</span>
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="7" y1="17" x2="17" y2="7"></line><polyline points="7 7 17 7 17 17"></polyline></svg>
+                </Link>
+              </div>
+            </div>
+
+            {/* Business */}
+            <div className="bg-white rounded-3xl overflow-hidden shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-gray-100 flex flex-col hover:-translate-y-1 transition-transform duration-300">
+              <div className="h-48 bg-[#FDEFEF] relative overflow-hidden flex items-end justify-center pt-8 px-8">
+                <div className="bg-white w-full h-full rounded-t-lg shadow-sm border border-b-0 border-gray-200 flex items-center justify-center relative">
+                  <div className="absolute top-4 left-4 right-4 flex gap-2">
+                    <div className="w-6 h-6 rounded-full bg-blue-100" />
+                    <div className="w-6 h-6 rounded-full bg-red-100" />
+                    <div className="w-6 h-6 rounded-full bg-yellow-100 flex items-center justify-center text-xs font-bold text-yellow-600">+</div>
+                  </div>
+                  <Briefcase className="w-16 h-16 text-red-300 mt-8" strokeWidth={1} />
+                </div>
+              </div>
+              <div className="p-8 flex-1 flex flex-col">
+                <h3 className="text-xl font-bold mb-3 text-[#33333B]">Enterprise Solutions</h3>
+                <p className="text-[#4A4A55] mb-6 flex-1 text-sm leading-relaxed">
+                  Streamline your company&apos;s document workflow. Secure, scalable plans designed for teams of any size.
+                </p>
+                <Link href="/business" className="self-end text-red-500 hover:text-red-600 transition-colors">
+                  <span className="sr-only">Go to Business</span>
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="7" y1="17" x2="17" y2="7"></line><polyline points="7 7 17 7 17 17"></polyline></svg>
+                </Link>
+              </div>
             </div>
           </div>
         </section>
 
-        {/* FAQ */}
-        <section className="py-24 px-4 sm:px-6 lg:px-8 max-w-3xl mx-auto">
-          <h2 className="text-3xl font-bold tracking-tight text-center text-foreground mb-12">Frequently Asked Questions</h2>
-          <Accordion className="w-full">
-            <AccordionItem value="item-1">
-              <AccordionTrigger className="text-left font-medium">Are my files secure?</AccordionTrigger>
-              <AccordionContent className="text-muted-foreground leading-relaxed">
-                Yes, absolutely. All file transfers are secured with advanced encryption. Once processed, your files are automatically and permanently deleted from our servers according to our retention policy to ensure maximum privacy.
-              </AccordionContent>
-            </AccordionItem>
-            <AccordionItem value="item-2">
-              <AccordionTrigger className="text-left font-medium">Do I need an account?</AccordionTrigger>
-              <AccordionContent className="text-muted-foreground leading-relaxed">
-                No, you can use our basic tools without creating an account. However, registering for an account unlocks higher usage limits, history, and advanced features.
-              </AccordionContent>
-            </AccordionItem>
-            <AccordionItem value="item-3">
-              <AccordionTrigger className="text-left font-medium">Can I use the tools on mobile?</AccordionTrigger>
-              <AccordionContent className="text-muted-foreground leading-relaxed">
-                Yes! Our platform is fully responsive and designed to work seamlessly on mobile devices, tablets, and desktop computers.
-              </AccordionContent>
-            </AccordionItem>
-            <AccordionItem value="item-4">
-              <AccordionTrigger className="text-left font-medium">Is the service free?</AccordionTrigger>
-              <AccordionContent className="text-muted-foreground leading-relaxed">
-                We offer a generous free tier that covers most everyday tasks. For high-volume processing, batch operations, or AI tools, we offer affordable Pro plans.
-              </AccordionContent>
-            </AccordionItem>
-          </Accordion>
+        {/* PREMIUM SECTION */}
+        <section className="py-12 px-4 sm:px-6 lg:px-8 max-w-[1200px] mx-auto">
+          <div className="bg-[#FFF8E6] rounded-[2rem] p-8 md:p-12 flex flex-col md:flex-row items-center gap-12 relative overflow-hidden">
+            <div className="flex-1 z-10">
+              <h2 className="text-4xl md:text-5xl font-bold tracking-tight text-[#33333B] mb-8 leading-tight">
+                Unlock Pro Features
+              </h2>
+
+              <ul className="space-y-6 mb-10 text-[#4A4A55] text-lg">
+                <li className="flex items-start">
+                  <CheckCircle2 className="w-6 h-6 text-green-500 mr-4 shrink-0 mt-0.5" strokeWidth={2} />
+                  <span>Enjoy unlimited daily tasks, larger file sizes, and priority processing speed.</span>
+                </li>
+                <li className="flex items-start">
+                  <CheckCircle2 className="w-6 h-6 text-green-500 mr-4 shrink-0 mt-0.5" strokeWidth={2} />
+                  <span>Get advanced OCR capabilities to extract text from scanned documents accurately.</span>
+                </li>
+                <li className="flex items-start">
+                  <CheckCircle2 className="w-6 h-6 text-green-500 mr-4 shrink-0 mt-0.5" strokeWidth={2} />
+                  <span>Go ad-free and access our dedicated desktop application for offline work.</span>
+                </li>
+              </ul>
+
+              <Button className="bg-[#FFC436] hover:bg-[#F2B625] text-black font-bold text-lg px-8 py-6 rounded-lg flex items-center gap-2">
+                <Crown className="w-5 h-5" />
+                Get Premium
+              </Button>
+            </div>
+
+            <div className="flex-1 relative w-full h-[300px] md:h-[400px] z-10 flex items-center justify-center">
+              {/* Abstract placeholder for the premium illustration */}
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-80 bg-white rounded-xl shadow-xl border border-gray-100 z-20 flex flex-col p-4 transform rotate-2">
+                <div className="h-6 w-3/4 bg-gray-200 rounded mb-4" />
+                <div className="h-40 w-full bg-gray-100 rounded mb-4 flex items-center justify-center text-gray-400">
+                  <ImageIcon className="w-12 h-12" />
+                </div>
+                <div className="h-4 w-full bg-gray-200 rounded mb-2" />
+                <div className="h-4 w-5/6 bg-gray-200 rounded" />
+              </div>
+
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 h-72 bg-red-400 rounded-3xl -z-10 transform -translate-x-8 translate-y-8" />
+
+              <div className="absolute bottom-0 right-0 w-48 h-40 bg-gray-200 rounded-xl shadow-lg border border-gray-100 z-30 overflow-hidden">
+                <div className="w-full h-full bg-[#E5E7EB] flex items-end justify-center opacity-80">
+                  {/* Placeholder for people image */}
+                  <div className="flex -mb-4">
+                    <div className="w-12 h-16 bg-gray-400 rounded-t-full mx-1" />
+                    <div className="w-12 h-16 bg-gray-500 rounded-t-full mx-1" />
+                    <div className="w-12 h-16 bg-gray-600 rounded-t-full mx-1" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="absolute top-8 left-8 w-16 h-16 bg-[#FFC436]/40 rounded-full flex items-center justify-center blur-sm z-30">
+                <Crown className="w-8 h-8 text-[#D9A321]" />
+              </div>
+            </div>
+          </div>
         </section>
 
-        {/* FINAL CTA */}
-        <section className="py-24 px-4 sm:px-6 lg:px-8 bg-primary text-primary-foreground text-center">
-          <div className="max-w-3xl mx-auto">
-            <h2 className="text-3xl md:text-5xl font-bold tracking-tight mb-6">Ready to simplify your files?</h2>
-            <p className="text-lg text-primary-foreground/80 mb-10">Upload a file and get started in seconds.</p>
-            <Link href="/tools">
-              <Button size="lg" variant="secondary" className="rounded-full px-10 py-6 text-lg font-semibold shadow-lg hover:shadow-xl transition-shadow text-primary">
-                Upload File
-              </Button>
-            </Link>
+        {/* FINAL CTA SECTION */}
+        <section className="py-16 px-4 sm:px-6 lg:px-8 relative overflow-hidden mt-8 bg-[#0F172A]">
+          {/* Abstract background shapes */}
+          <div className="absolute top-0 right-0 -translate-y-1/4 translate-x-1/4 w-[800px] h-[800px] bg-blue-500/20 rounded-full blur-[100px] pointer-events-none" />
+          <div className="absolute bottom-0 left-0 translate-y-1/4 -translate-x-1/4 w-[600px] h-[600px] bg-red-500/20 rounded-full blur-[100px] pointer-events-none" />
+
+          <div className="max-w-4xl mx-auto text-center z-10 relative">
+            <h2 className="text-4xl md:text-6xl font-bold tracking-tight text-white mb-6 leading-tight">
+              Ready to simplify your document workflow?
+            </h2>
+            <p className="text-xl text-slate-300 mb-10 max-w-2xl mx-auto font-medium">
+              Join millions of users who trust our platform to manage, edit, and convert their PDFs securely and instantly.
+            </p>
+
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+              <Link href="/tools">
+                <Button className="bg-red-500 hover:bg-red-600 text-white font-bold text-lg px-10 py-7 rounded-full transition-all hover:scale-105 shadow-[0_0_40px_rgba(239,68,68,0.4)]">
+                  Start for Free
+                </Button>
+              </Link>
+              <Link href="#tools">
+                <Button variant="outline" className="bg-transparent border-slate-700 text-white hover:bg-slate-800 hover:text-white font-bold text-lg px-10 py-7 rounded-full transition-all">
+                  Explore All Tools
+                </Button>
+              </Link>
+            </div>
+
+            <p className="mt-8 text-sm text-slate-400 font-medium">
+              No credit card required • Secure 256-bit encryption • Auto-delete after 2 hours
+            </p>
           </div>
         </section>
       </main>

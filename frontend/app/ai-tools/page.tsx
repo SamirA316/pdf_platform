@@ -34,7 +34,9 @@ export default function AIToolsPage() {
                 description={tool.description}
                 icon={tool.icon}
                 href={`/tools/${tool.slug}`}
-                accent={true}
+                color={tool.color}
+                bgColor={tool.bgColor}
+                badge={tool.badge}
               />
             ))}
           </div>

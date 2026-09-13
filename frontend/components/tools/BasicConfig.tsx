@@ -22,7 +22,7 @@ export function BasicConfig({ files, onProcess, title }: BasicConfigProps) {
         File: <span className="font-medium text-foreground">{files[0]?.name}</span>
       </p>
 
-      <Button size="lg" onClick={() => onProcess({})} className="w-full rounded-xl shadow-sm max-w-xs mx-auto">
+      <Button onClick={() => onProcess({})} className="w-full h-10 rounded-lg font-bold shadow-sm max-w-xs mx-auto">
         Process File
       </Button>
     </div>

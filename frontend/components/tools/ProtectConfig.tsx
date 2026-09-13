@@ -52,9 +52,8 @@ export function ProtectConfig({ files, onProcess }: ProtectConfigProps) {
 
       <div className="flex justify-center">
         <Button 
-          size="lg" 
           onClick={() => onProcess({ password })} 
-          className="w-full rounded-xl shadow-sm"
+          className="w-full h-10 rounded-lg font-bold shadow-sm"
           disabled={!password || password.length < 3}
         >
           Protect Document

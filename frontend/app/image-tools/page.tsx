@@ -33,6 +33,9 @@ export default function ImageToolsPage() {
                 description={tool.description}
                 icon={tool.icon}
                 href={`/tools/${tool.slug}`}
+                color={tool.color}
+                bgColor={tool.bgColor}
+                badge={tool.badge}
               />
             ))}
           </div>

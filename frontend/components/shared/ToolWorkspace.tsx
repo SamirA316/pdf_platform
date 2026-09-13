@@ -9,13 +9,14 @@ import { ProtectConfig } from "@/components/tools/ProtectConfig";
 import { ResizeConfig } from "@/components/tools/ResizeConfig";
 import { ChatConfig } from "@/components/tools/ChatConfig";
 import { BasicConfig } from "@/components/tools/BasicConfig";
+import { RotateConfig } from "@/components/tools/RotateConfig";
 
 type FlowState = "upload" | "configure" | "processing" | "result" | "error";
 
 interface ToolWorkspaceProps {
   accept: string;
   maxSizeMB: number;
-  actionType: "compress" | "merge" | "protect" | "resize" | "chat" | "basic";
+  actionType: "compress" | "merge" | "protect" | "resize" | "chat" | "rotate" | "basic";
   allowMultiple: boolean;
   title: string;
 }
@@ -75,6 +76,8 @@ export function ToolWorkspace({ accept, maxSizeMB, actionType, allowMultiple, ti
         return <ResizeConfig files={files} onProcess={handleProcess} />;
       case "chat":
         return <ChatConfig files={files} onProcess={handleProcess} />;
+      case "rotate":
+        return <RotateConfig files={files} onProcess={handleProcess} />;
       default:
         return <BasicConfig files={files} onProcess={handleProcess} title={title} />;
     }

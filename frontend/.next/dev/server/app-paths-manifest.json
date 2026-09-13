@@ -1,7 +1,0 @@
-{
-  "/ai-tools/page": "app/ai-tools/page.js",
-  "/image-tools/page": "app/image-tools/page.js",
-  "/page": "app/page.js",
-  "/signup/page": "app/signup/page.js",
-  "/tools/page": "app/tools/page.js"
-}

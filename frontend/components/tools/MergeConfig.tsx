@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { FileText, X, Plus, Layers } from "lucide-react";
+import { FileText, X, Layers } from "lucide-react";
 
 interface MergeConfigProps {
   files: File[];
@@ -41,12 +41,12 @@ export function MergeConfig({ files, onProcess, onAddMore, onRemoveFile }: Merge
         ))}
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-4 justify-center">
-        <Button variant="outline" size="lg" onClick={onAddMore} className="rounded-full flex-1">
-          <Plus className="w-4 h-4 mr-2" /> Add More Files
+      <div className="flex gap-4 mt-8 pt-6 border-t border-border">
+        <Button variant="outline" onClick={onAddMore} className="h-10 rounded-lg font-bold flex-1">
+          Add More
         </Button>
-        <Button size="lg" onClick={() => onProcess()} className="rounded-full flex-1 shadow-sm" disabled={files.length < 2}>
-          Merge {files.length} Files
+        <Button onClick={() => onProcess()} className="h-10 rounded-lg font-bold flex-1 shadow-sm" disabled={files.length < 2}>
+          Merge Files
         </Button>
       </div>
       
