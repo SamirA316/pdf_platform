@@ -20,10 +20,10 @@ export function ProgressState({ fileName }: { fileName: string }) {
 
 export function ResultCard({ fileName, savedBytes }: { fileName: string, savedBytes: string }) {
   return (
-    <div className="w-full max-w-3xl mx-auto rounded-2xl border border-success/20 bg-success/5 p-12 text-center shadow-sm">
+    <div className="w-full max-w-3xl mx-auto rounded-3xl border border-border bg-card p-12 text-center shadow-sm">
       <div className="flex flex-col items-center justify-center space-y-6">
-        <div className="w-16 h-16 bg-success text-white rounded-full flex items-center justify-center mb-2 shadow-sm">
-          <CheckCircle2 className="w-8 h-8" strokeWidth={2} />
+        <div className="w-28 h-28 bg-green-500 text-white rounded-full flex items-center justify-center mb-6 shadow-lg shadow-green-500/30 ring-8 ring-green-500/10">
+          <CheckCircle2 className="w-14 h-14" strokeWidth={3} />
         </div>
         <div>
           <h3 className="text-2xl font-bold text-foreground">Compression Complete!</h3>
@@ -33,10 +33,10 @@ export function ResultCard({ fileName, savedBytes }: { fileName: string, savedBy
           </p>
         </div>
         <div className="flex gap-4 mt-4">
-          <Button size="lg" className="rounded-full px-8 gap-2">
+          <Button className="h-10 rounded-[10px] px-8 gap-2 font-bold shadow-sm">
             <Download className="w-4 h-4" /> Download File
           </Button>
-          <Button variant="outline" size="lg" className="rounded-full px-8 gap-2 border-border">
+          <Button variant="outline" className="h-10 rounded-[10px] px-8 gap-2 font-bold border-border shadow-sm">
             <RefreshCw className="w-4 h-4" /> Process Another
           </Button>
         </div>
@@ -56,7 +56,7 @@ export function ErrorState({ message, onRetry }: { message: string, onRetry: () 
           <h3 className="text-xl font-bold text-destructive">Upload Failed</h3>
           <p className="text-muted-foreground mt-2">{message}</p>
         </div>
-        <Button onClick={onRetry} variant="outline" className="rounded-full px-8 mt-4 border-destructive/20 hover:bg-destructive/10 text-destructive hover:text-destructive">
+        <Button onClick={onRetry} variant="outline" className="h-10 rounded-[10px] px-8 mt-4 font-bold border-destructive/20 hover:bg-destructive/10 text-destructive hover:text-destructive shadow-sm">
           Try Again
         </Button>
       </div>

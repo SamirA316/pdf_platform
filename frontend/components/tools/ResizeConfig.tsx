@@ -64,9 +64,8 @@ export function ResizeConfig({ files, onProcess }: ResizeConfigProps) {
 
       <div className="flex justify-center">
         <Button 
-          size="lg" 
           onClick={() => onProcess({ width, height, maintainRatio })} 
-          className="w-full rounded-xl shadow-sm"
+          className="w-full h-10 rounded-lg font-bold shadow-sm"
           disabled={!width && !height}
         >
           Resize Image
