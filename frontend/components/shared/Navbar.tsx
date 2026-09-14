@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Menu, X, ChevronDown } from "lucide-react";
 import { tools, ToolMetadata } from "@/config/tools";
+import { useAuth } from "@/context/AuthContext";
 
 const getTools = (slugs: string[]) => slugs.map(s => tools.find(t => t.slug === s)).filter(Boolean) as ToolMetadata[];
 
@@ -39,6 +40,7 @@ const megaMenuColumns = [
 
 export function Navbar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const { user, isLoading, logout } = useAuth();
 
   return (
     <header className="sticky top-0 z-50 w-full bg-white border-b border-[#E5E5E5]">
@@ -114,14 +116,29 @@ export function Navbar() {
         
         {/* Right Side: Auth */}
         <div className="hidden lg:flex items-center h-full">
-          <Link href="/login" className="px-5 h-full flex items-center text-[14px] font-bold text-[#33333B] hover:text-[#E5322D] transition-colors">
-            Log in
-          </Link>
-          <Link href="/signup" className="ml-2">
-            <Button className="bg-[#E5322D] hover:bg-[#CC2A26] text-white font-bold rounded-lg px-7 h-10 text-[14px] shadow-[0_2px_10px_rgba(229,50,45,0.2)] transition-transform active:scale-95">
-              Sign up
-            </Button>
-          </Link>
+          {isLoading ? (
+             <div className="w-20 h-8 bg-gray-100 animate-pulse rounded"></div>
+          ) : user ? (
+            <div className="flex items-center gap-4">
+              <span className="text-[14px] font-semibold text-[#4A4A55]">
+                Hi, {user.name.split(" ")[0]}
+              </span>
+              <Button onClick={logout} variant="outline" className="text-[#33333B] border-gray-200 hover:bg-gray-50 font-bold rounded-lg px-5 h-10 text-[14px] transition-transform">
+                Log out
+              </Button>
+            </div>
+          ) : (
+            <>
+              <Link href="/login" className="px-5 h-full flex items-center text-[14px] font-bold text-[#33333B] hover:text-[#E5322D] transition-colors">
+                Log in
+              </Link>
+              <Link href="/signup" className="ml-2">
+                <Button className="bg-[#E5322D] hover:bg-[#CC2A26] text-white font-bold rounded-lg px-7 h-10 text-[14px] shadow-[0_2px_10px_rgba(229,50,45,0.2)] transition-transform active:scale-95">
+                  Sign up
+                </Button>
+              </Link>
+            </>
+          )}
         </div>
 
         {/* Mobile Menu Toggle */}
@@ -140,8 +157,17 @@ export function Navbar() {
            <Link href="/tools/compress-pdf" onClick={() => setIsMobileMenuOpen(false)} className="block py-4 font-bold text-[#33333B] border-b border-[#F0F0F0] uppercase text-[14px] tracking-wide">Compress PDF</Link>
            <Link href="/#tools" onClick={() => setIsMobileMenuOpen(false)} className="block py-4 font-bold text-[#33333B] border-b border-[#F0F0F0] uppercase text-[14px] tracking-wide">All Tools</Link>
            <div className="flex flex-col gap-3 mt-8">
-             <Link href="/login" onClick={() => setIsMobileMenuOpen(false)} className="w-full text-center py-3.5 bg-[#F5F5F5] rounded-lg font-bold text-[#33333B]">Log in</Link>
-             <Link href="/signup" onClick={() => setIsMobileMenuOpen(false)} className="w-full text-center py-3.5 bg-[#E5322D] text-white rounded-lg font-bold">Sign up</Link>
+             {user ? (
+               <>
+                <div className="w-full text-center py-2 font-semibold text-[#4A4A55]">Hi, {user.name}</div>
+                <button onClick={() => { logout(); setIsMobileMenuOpen(false); }} className="w-full text-center py-3.5 bg-[#F5F5F5] rounded-lg font-bold text-[#33333B]">Log out</button>
+               </>
+             ) : (
+               <>
+                 <Link href="/login" onClick={() => setIsMobileMenuOpen(false)} className="w-full text-center py-3.5 bg-[#F5F5F5] rounded-lg font-bold text-[#33333B]">Log in</Link>
+                 <Link href="/signup" onClick={() => setIsMobileMenuOpen(false)} className="w-full text-center py-3.5 bg-[#E5322D] text-white rounded-lg font-bold">Sign up</Link>
+               </>
+             )}
            </div>
         </div>
       )}

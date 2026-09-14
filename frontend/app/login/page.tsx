@@ -2,17 +2,23 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { CheckCircle2, AlertCircle, Eye, EyeOff } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 
 export default function LoginPage() {
   const [formData, setFormData] = useState({ email: "", password: "" });
-  const [errors, setErrors] = useState({ email: "", password: "" });
+  const [errors, setErrors] = useState({ email: "", password: "", server: "" });
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  
+  const { login } = useAuth();
+  const router = useRouter();
 
   const validate = () => {
     let isValid = true;
-    const newErrors = { email: "", password: "" };
+    const newErrors = { email: "", password: "", server: "" };
 
     if (!formData.email) {
       newErrors.email = "Email is required";
@@ -34,11 +40,35 @@ export default function LoginPage() {
     return isValid;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (validate()) {
-      // Proceed with login logic here
-      console.log("Login submitted:", formData);
+      setLoading(true);
+      try {
+        const res = await fetch("http://localhost:3001/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(formData),
+          credentials: "include",
+        });
+        
+        const data = await res.json();
+        
+        if (!res.ok) {
+          throw new Error(data.error || "Login failed");
+        }
+        
+        login(data.user);
+        router.push("/");
+      } catch (err) {
+        if (err instanceof Error) {
+          setErrors((prev) => ({ ...prev, server: err.message }));
+        } else {
+          setErrors((prev) => ({ ...prev, server: "An unknown error occurred" }));
+        }
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -211,8 +241,14 @@ export default function LoginPage() {
               </div>
             </div>
 
-            <Button type="submit" className="w-full rounded-xl bg-[#E5322D] hover:bg-[#CC2A26] text-white font-bold text-base h-11 transition-all hover:scale-[1.02] active:scale-[0.98]">
-              Sign in
+            {errors.server && (
+              <div className="bg-red-50 text-red-500 p-3 rounded-lg text-sm text-center font-semibold">
+                {errors.server}
+              </div>
+            )}
+
+            <Button disabled={loading} type="submit" className="w-full rounded-xl bg-[#E5322D] hover:bg-[#CC2A26] text-white font-bold text-base h-11 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:hover:scale-100 disabled:cursor-not-allowed">
+              {loading ? "Signing in..." : "Sign in"}
             </Button>
           </form>
 

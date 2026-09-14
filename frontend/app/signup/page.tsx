@@ -2,18 +2,27 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { CheckCircle2, AlertCircle, Eye, EyeOff } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 
 export default function SignupPage() {
   const [formData, setFormData] = useState({ name: "", email: "", password: "", confirmPassword: "" });
-  const [errors, setErrors] = useState({ name: "", email: "", password: "", confirmPassword: "" });
+  const [errors, setErrors] = useState({ name: "", email: "", password: "", confirmPassword: "", server: "" });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [step, setStep] = useState<1 | 2>(1);
+  const [otp, setOtp] = useState("");
+  const [registeredEmail, setRegisteredEmail] = useState("");
+
+  const { login } = useAuth();
+  const router = useRouter();
 
   const validate = () => {
     let isValid = true;
-    const newErrors = { name: "", email: "", password: "", confirmPassword: "" };
+    const newErrors = { name: "", email: "", password: "", confirmPassword: "", server: "" };
 
     if (!formData.name) {
       newErrors.name = "Name is required";
@@ -51,11 +60,70 @@ export default function SignupPage() {
     return isValid;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (validate()) {
-      // Proceed with signup logic here
-      console.log("Signup submitted:", formData);
+      setLoading(true);
+      try {
+        const res = await fetch("http://localhost:3001/api/auth/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: formData.name, email: formData.email, password: formData.password }),
+          credentials: "include",
+        });
+        
+        const data = await res.json();
+        
+        if (!res.ok) {
+          throw new Error(data.error || "Registration failed");
+        }
+        
+        setRegisteredEmail(formData.email);
+        setStep(2);
+      } catch (err) {
+        if (err instanceof Error) {
+          setErrors((prev) => ({ ...prev, server: err.message }));
+        } else {
+          setErrors((prev) => ({ ...prev, server: "An unknown error occurred" }));
+        }
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
+  const handleVerifyOTP = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!otp || otp.length !== 6) {
+      setErrors((prev) => ({ ...prev, server: "Please enter a valid 6-digit OTP" }));
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await fetch("http://localhost:3001/api/auth/verify-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: registeredEmail, otp }),
+        credentials: "include",
+      });
+      
+      const data = await res.json();
+      
+      if (!res.ok) {
+        throw new Error(data.error || "Verification failed");
+      }
+      
+      login(data.user);
+      router.push("/");
+    } catch (err) {
+      if (err instanceof Error) {
+        setErrors((prev) => ({ ...prev, server: err.message }));
+      } else {
+        setErrors((prev) => ({ ...prev, server: "An unknown error occurred" }));
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -138,14 +206,15 @@ export default function SignupPage() {
             </div>
             
             <h2 className="text-2xl font-extrabold text-[#33333B] tracking-tight mb-1">
-              Create an account
+              {step === 1 ? "Create an account" : "Verify your email"}
             </h2>
             <p className="text-slate-500 text-sm font-medium">
-              Start your free journey with us today.
+              {step === 1 ? "Start your free journey with us today." : `We've sent a 6-digit code to ${registeredEmail}`}
             </p>
           </div>
 
-          <form className="space-y-3" onSubmit={handleSubmit} noValidate>
+          {step === 1 ? (
+            <form className="space-y-3" onSubmit={handleSubmit} noValidate>
             <div>
               <label htmlFor="name" className="block text-sm font-bold text-[#33333B] mb-1">
                 Full name
@@ -270,10 +339,55 @@ export default function SignupPage() {
               )}
             </div>
 
-            <Button type="submit" className="w-full rounded-xl bg-[#E5322D] hover:bg-[#CC2A26] text-white font-bold text-base h-11 transition-all hover:scale-[1.02] active:scale-[0.98]">
-              Create Account
+            {errors.server && (
+              <div className="bg-red-50 text-red-500 p-3 rounded-lg text-sm text-center font-semibold">
+                {errors.server}
+              </div>
+            )}
+
+            <Button disabled={loading} type="submit" className="w-full rounded-xl bg-[#E5322D] hover:bg-[#CC2A26] text-white font-bold text-base h-11 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:hover:scale-100 disabled:cursor-not-allowed">
+              {loading ? "Creating Account..." : "Create Account"}
             </Button>
           </form>
+          ) : (
+            <form className="space-y-4" onSubmit={handleVerifyOTP} noValidate>
+              <div>
+                <label htmlFor="otp" className="block text-sm font-bold text-[#33333B] mb-1">
+                  Verification Code
+                </label>
+                <input
+                  id="otp"
+                  name="otp"
+                  type="text"
+                  maxLength={6}
+                  value={otp}
+                  onChange={(e) => {
+                    setOtp(e.target.value.replace(/\D/g, ''));
+                    setErrors((prev) => ({ ...prev, server: "" }));
+                  }}
+                  className={`w-full text-center tracking-widest text-2xl rounded-xl border bg-slate-50 px-4 py-3 text-[#33333B] placeholder-slate-300 focus:bg-white focus:outline-none transition-all duration-200 font-bold ${
+                    errors.server 
+                      ? "border-red-500 focus:border-red-500 focus:ring-4 focus:ring-red-500/20" 
+                      : "border-slate-400 focus:border-black focus:ring-1 focus:ring-black"
+                  }`}
+                  placeholder="000000"
+                />
+              </div>
+              {errors.server && (
+                <div className="bg-red-50 text-red-500 p-3 rounded-lg text-sm text-center font-semibold">
+                  {errors.server}
+                </div>
+              )}
+              <Button disabled={loading || otp.length !== 6} type="submit" className="w-full rounded-xl bg-[#E5322D] hover:bg-[#CC2A26] text-white font-bold text-base h-11 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:hover:scale-100 disabled:cursor-not-allowed">
+                {loading ? "Verifying..." : "Verify & Log in"}
+              </Button>
+              <div className="text-center">
+                <button type="button" onClick={() => setStep(1)} className="text-sm font-semibold text-slate-500 hover:text-slate-800 transition-colors">
+                  Wrong email? Go back
+                </button>
+              </div>
+            </form>
+          )}
 
           <div className="mt-4">
             <div className="relative">
