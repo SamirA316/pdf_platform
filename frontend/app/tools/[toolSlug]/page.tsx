@@ -29,7 +29,7 @@ export default async function ToolPage({ params }: PageProps) {
              {tool.title}
            </h1>
            
-           <p className="text-lg md:text-[22px] text-[#4A4A55] max-w-3xl mx-auto font-medium leading-relaxed mb-8">
+           <p className="text-lg md:text-xl text-[#4A4A55] max-w-2xl mx-auto font-medium leading-relaxed mb-8">
              {tool.description}
            </p>
 

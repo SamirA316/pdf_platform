@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { HardDrive, Cloud, ChevronDown, Link as LinkIcon, Image as ImageIcon, Box, UploadCloud, FileType2, Shield, Zap } from "lucide-react";
+import { HardDrive, Cloud, ChevronDown, Link as LinkIcon, Image as ImageIcon, Box, UploadCloud, Shield, CheckCircle2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -59,29 +59,25 @@ export function UploadDropzone({
   return (
     <div className="w-full max-w-3xl mx-auto p-4 md:p-6">
       <div 
-        className={`relative w-full transition-all duration-300 ease-in-out flex flex-col items-center justify-center py-10 px-6 md:px-10 rounded-[2rem] border-2 border-dashed ${
+        className={`relative w-full transition-all duration-300 ease-in-out flex flex-col items-center justify-center py-8 px-6 md:px-10 rounded-3xl border-2 border-dashed ${
           isDragging 
-            ? "bg-primary/5 border-primary shadow-xl scale-[1.02]" 
-            : "bg-white border-border shadow-sm hover:border-primary/40 hover:bg-gray-50/50 hover:shadow-md"
+            ? "bg-red-50/50 border-red-400 shadow-lg scale-[1.01]" 
+            : "bg-[#fcfcfc] border-gray-300 shadow-sm hover:border-red-400 hover:bg-white hover:shadow-md"
         }`}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
-        <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-[2rem]">
-          <div className={`absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent transition-opacity duration-500 ${isDragging ? 'opacity-100' : 'opacity-0'}`} />
+        <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-3xl">
+          <div className={`absolute inset-0 bg-gradient-to-b from-red-50/50 to-transparent transition-opacity duration-500 ${isDragging ? 'opacity-100' : 'opacity-0'}`} />
         </div>
 
         <div className="flex flex-col items-center justify-center relative z-10 w-full">
           
-          <div className={`mb-4 p-4 rounded-full transition-colors duration-300 ${isDragging ? 'bg-primary/10 text-primary' : 'bg-gray-50 text-gray-400'}`}>
-            {isImage ? <ImageIcon className="w-10 h-10" strokeWidth={1.5} /> : <FileType2 className="w-10 h-10" strokeWidth={1.5} />}
-          </div>
-
-          <h3 className="text-2xl md:text-3xl font-extrabold text-[#33333B] tracking-tight text-center mb-2">
+          <h3 className="text-2xl md:text-3xl font-extrabold text-[#33333B] tracking-tight text-center mb-2 mt-4">
             Upload your {fileType} files
           </h3>
-          <p className="text-gray-500 mb-6 text-center text-sm md:text-base font-medium max-w-md">
+          <p className="text-gray-400 mb-6 text-center text-sm md:text-base font-medium max-w-md">
             Drag and drop your files here, or use the button below to browse your computer or cloud storage.
           </p>
 
@@ -144,11 +140,16 @@ export function UploadDropzone({
             </DropdownMenu>
           </div>
           
-          <div className="mt-5 flex items-center justify-center gap-6 text-xs font-semibold text-gray-400">
-            <span className="flex items-center gap-1.5"><Shield className="w-4 h-4" /> Secure encryption</span>
-            <span className="flex items-center gap-1.5"><Zap className="w-4 h-4" /> Fast processing</span>
-            <span className="hidden sm:flex items-center gap-1.5">Max {maxSizeMB}MB</span>
+          <div className="mt-6 flex flex-col md:flex-row items-center justify-center gap-3 md:gap-6 text-sm text-gray-500 font-medium w-full">
+            <span className="flex items-center gap-1.5 bg-gray-50 px-3 py-1.5 rounded-full border border-gray-100">
+              <Shield className="w-4 h-4 text-green-500" /> Secure encryption
+            </span>
+            <span className="flex items-center gap-1.5 bg-gray-50 px-3 py-1.5 rounded-full border border-gray-100">
+              <CheckCircle2 className="w-4 h-4 text-green-500" /> Up to {maxSizeMB} MB per file
+            </span>
           </div>
+          
+          <p className="mt-4 text-gray-400 text-xs font-medium text-center">Your files are automatically removed after processing.</p>
 
         </div>
         

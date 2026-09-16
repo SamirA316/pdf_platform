@@ -8,11 +8,11 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "PDF Platform - Fast, simple, secure",
-  description: "Compress, convert, merge, resize, edit and transform your files in seconds.",
+  title: "QuickPDF - Every tool you need to work with PDFs",
+  description: "Merge, split, compress, convert, rotate, unlock and watermark PDFs with just a few clicks. 100% Secure and fast.",
 };
 
-import { AuthProvider } from "@/context/AuthContext";
+import { ReduxProvider } from "@/store/ReduxProvider";
 
 export default function RootLayout({
   children,
@@ -25,9 +25,9 @@ export default function RootLayout({
       className={`${inter.variable} h-full antialiased`}
     >
       <body className="font-sans min-h-full flex flex-col">
-        <AuthProvider>
+        <ReduxProvider>
           {children}
-        </AuthProvider>
+        </ReduxProvider>
       </body>
     </html>
   );

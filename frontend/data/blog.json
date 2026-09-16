@@ -1,0 +1,109 @@
+{
+  "featuredPost": {
+    "slug": "introducing-quickpdf-2-0",
+    "title": "Introducing QuickPDF 2.0: Faster, Smarter, and Completely Redesigned",
+    "excerpt": "Today we're thrilled to announce the biggest update in our history. We've rebuilt QuickPDF from the ground up to provide a blazing fast, ultra-secure, and beautifully designed experience for all your document needs.",
+    "category": "Product Update",
+    "date": "Sep 15, 2026",
+    "readTime": "5 min read",
+    "color": "bg-red-50 text-[#E5322D]",
+    "author": {
+      "name": "Samir Ansari",
+      "role": "Lead Developer",
+      "avatar": "S"
+    },
+    "content": "\n    <p class=\"text-xl leading-relaxed mb-8 font-medium\">\n      Today we're thrilled to announce the biggest update in our history. We've rebuilt QuickPDF from the ground up to provide a blazing fast, ultra-secure, and beautifully designed experience for all your document needs.\n    </p>\n    \n    <h2 class=\"text-3xl mt-12 mb-6 tracking-tight\">What's new in 2.0?</h2>\n    <p class=\"mb-6 leading-relaxed\">\n      Over the last six months, our team has been hard at work addressing your most requested features and completely overhauling our processing engine. Here are the highlights of what you can expect:\n    </p>\n    \n    <ul class=\"space-y-4 mb-10 list-disc pl-5\">\n      <li class=\"leading-relaxed\"><strong class=\"text-[#33333B]\">Client-side Processing:</strong> Many of our tools now process your files directly in your browser without ever uploading them to our servers, resulting in instant results and absolute privacy.</li>\n      <li class=\"leading-relaxed\"><strong class=\"text-[#33333B]\">A Brand New Interface:</strong> We've completely redesigned our UI to be cleaner, faster, and more intuitive. Every tool is now just a single click away.</li>\n      <li class=\"leading-relaxed\"><strong class=\"text-[#33333B]\">Batch Processing:</strong> You can now drag and drop dozens of files at once. QuickPDF will process them in parallel and download them as a convenient ZIP file.</li>\n    </ul>\n    \n    <h2 class=\"text-3xl mt-12 mb-6 tracking-tight\">Under the Hood</h2>\n    <p class=\"mb-8 leading-relaxed\">\n      We didn't just change how QuickPDF looks; we fundamentally changed how it works. By migrating to a robust Next.js frontend combined with highly optimized WebAssembly (Wasm) modules for PDF manipulation, we've reduced processing times by up to 80% on average.\n    </p>\n    \n    <blockquote class=\"border-l-4 border-[#E5322D] bg-red-50/50 py-6 px-8 rounded-r-2xl my-10 text-xl font-medium text-[#33333B] leading-relaxed\">\n      \"Our goal was simple: build the fastest PDF tool on the web without compromising an inch on security or user experience.\"\n    </blockquote>\n    \n    <h2 class=\"text-3xl mt-12 mb-6 tracking-tight\">What's Next?</h2>\n    <p class=\"mb-6 leading-relaxed\">\n      This is just the beginning. Over the coming weeks, we'll be rolling out our highly anticipated AI features, including the ability to chat with your PDFs and automatically summarize long documents. Stay tuned!\n    </p>\n  "
+  },
+  "blogPosts": [
+    {
+      "slug": "secure-your-pdf-documents",
+      "title": "How to Secure Your PDF Documents Before Sharing",
+      "excerpt": "Learn the best practices for encrypting and redacting sensitive information in your PDFs to ensure your data stays private.",
+      "category": "Security",
+      "date": "Sep 12, 2026",
+      "readTime": "5 min read",
+      "color": "bg-blue-50 text-blue-600",
+      "author": {
+        "name": "Alice Security",
+        "role": "Security Researcher",
+        "avatar": "A"
+      },
+      "content": "\n      <p class=\"text-xl leading-relaxed mb-8 font-medium\">Securing your documents is more important now than ever. Here is how you can ensure your PDFs are safe.</p>\n      <h2 class=\"text-3xl mt-12 mb-6 tracking-tight\">1. Use Strong Passwords</h2>\n      <p class=\"mb-6 leading-relaxed\">Always use AES-256 encryption when exporting your PDFs. QuickPDF automatically uses this standard when you use our Protect PDF tool.</p>\n    "
+    },
+    {
+      "slug": "ultimate-guide-compressing-pdfs",
+      "title": "The Ultimate Guide to Compressing Large PDF Files",
+      "excerpt": "Struggling to send a large PDF over email? Discover our top tips for reducing file size without losing quality.",
+      "category": "Guides",
+      "date": "Sep 08, 2026",
+      "readTime": "4 min read",
+      "color": "bg-green-50 text-green-600",
+      "author": {
+        "name": "Bob Optimizer",
+        "role": "Content Creator",
+        "avatar": "B"
+      },
+      "content": "\n      <p class=\"text-xl leading-relaxed mb-8 font-medium\">Email attachments can be frustrating. Here is how you can shrink those PDFs down to a manageable size.</p>\n      <h2 class=\"text-3xl mt-12 mb-6 tracking-tight\">Understanding Compression</h2>\n      <p class=\"mb-6 leading-relaxed\">Most of the size in a PDF comes from unoptimized images. By downscaling images to 144 DPI, you can save massive amounts of space without noticeable quality loss on screens.</p>\n    "
+    },
+    {
+      "slug": "quickpdf-ai-launch",
+      "title": "Announcing QuickPDF AI: Smarter Document Processing",
+      "excerpt": "We're excited to launch our new AI-powered suite of tools, allowing you to summarize and interact with your PDFs like never before.",
+      "category": "Product News",
+      "date": "Sep 01, 2026",
+      "readTime": "3 min read",
+      "color": "bg-red-50 text-red-600",
+      "author": {
+        "name": "Samir Ansari",
+        "role": "Lead Developer",
+        "avatar": "S"
+      },
+      "content": "\n      <p class=\"text-xl leading-relaxed mb-8 font-medium\">The future of documents is intelligent. Today we are bringing AI directly into your workflow.</p>\n      <h2 class=\"text-3xl mt-12 mb-6 tracking-tight\">Chat with your PDF</h2>\n      <p class=\"mb-6 leading-relaxed\">You can now ask questions about your documents and get instant answers powered by state-of-the-art LLMs, right inside QuickPDF.</p>\n    "
+    },
+    {
+      "slug": "hidden-features",
+      "title": "5 Hidden Features in QuickPDF You Should Be Using",
+      "excerpt": "From batch processing to custom watermarks, uncover the powerful features that can supercharge your daily workflow.",
+      "category": "Tips & Tricks",
+      "date": "Aug 25, 2026",
+      "readTime": "6 min read",
+      "color": "bg-yellow-50 text-yellow-700",
+      "author": {
+        "name": "Sarah Workflow",
+        "role": "Product Manager",
+        "avatar": "S"
+      },
+      "content": "\n      <p class=\"text-xl leading-relaxed mb-8 font-medium\">Are you getting the most out of QuickPDF? Here are some features you might have missed.</p>\n      <h2 class=\"text-3xl mt-12 mb-6 tracking-tight\">Batch Processing</h2>\n      <p class=\"mb-6 leading-relaxed\">Did you know you can drag and drop up to 100 files at once? Our engine will process them all in parallel.</p>\n    "
+    },
+    {
+      "slug": "client-side-architecture",
+      "title": "Why We Switched to a Fully Client-Side Architecture",
+      "excerpt": "A deep dive into our engineering decisions and how processing files on your device drastically improves speed and privacy.",
+      "category": "Engineering",
+      "date": "Aug 18, 2026",
+      "readTime": "8 min read",
+      "color": "bg-purple-50 text-purple-600",
+      "author": {
+        "name": "Samir Ansari",
+        "role": "Lead Developer",
+        "avatar": "S"
+      },
+      "content": "\n      <p class=\"text-xl leading-relaxed mb-8 font-medium\">Moving from the server to the browser was the best engineering decision we ever made.</p>\n      <h2 class=\"text-3xl mt-12 mb-6 tracking-tight\">WebAssembly is the Future</h2>\n      <p class=\"mb-6 leading-relaxed\">By compiling our C++ PDF libraries to WebAssembly, we eliminated the need to upload files entirely. Your documents never leave your computer.</p>\n    "
+    },
+    {
+      "slug": "future-of-digital-signatures",
+      "title": "The Future of Digital Signatures",
+      "excerpt": "Explore how e-signatures are evolving and what it means for the future of legal and business document workflows.",
+      "category": "Industry Trends",
+      "date": "Aug 10, 2026",
+      "readTime": "5 min read",
+      "color": "bg-orange-50 text-orange-600",
+      "author": {
+        "name": "Legal Team",
+        "role": "Compliance",
+        "avatar": "L"
+      },
+      "content": "\n      <p class=\"text-xl leading-relaxed mb-8 font-medium\">Digital signatures are no longer just a convenience; they are a requirement for modern business.</p>\n      <h2 class=\"text-3xl mt-12 mb-6 tracking-tight\">Cryptographic Proof</h2>\n      <p class=\"mb-6 leading-relaxed\">The future lies in blockchain-backed cryptographic proofs that ensure a document has not been tampered with since signing.</p>\n    "
+    }
+  ]
+}

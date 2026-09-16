@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Logo } from "@/components/shared/Logo";
 
 export function Footer() {
   return (
@@ -6,12 +7,10 @@ export function Footer() {
       <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
           <div className="col-span-2 md:col-span-1">
-            <Link href="/" className="flex items-center space-x-2 mb-4">
-              <div className="flex h-6 w-6 items-center justify-center rounded bg-primary text-primary-foreground font-bold text-xs">
-                P
-              </div>
-              <span className="font-bold text-lg tracking-tight text-foreground">
-                PDF Platform
+            <Link href="/" className="flex items-center gap-2 mb-6">
+              <Logo className="w-[32px] h-[32px]" />
+              <span className="font-extrabold text-[22px] tracking-tight text-[#33333B]">
+                QuickPDF
               </span>
             </Link>
             <p className="text-sm text-muted-foreground mt-4 max-w-xs">
@@ -91,7 +90,7 @@ export function Footer() {
         </div>
         <div className="mt-12 pt-8 border-t border-border flex flex-col md:flex-row justify-between items-center gap-4">
           <p className="text-sm text-muted-foreground">
-            &copy; {new Date().getFullYear()} PDF Platform. All rights reserved.
+            &copy; {new Date().getFullYear()} QuickPDF. All rights reserved.
           </p>
         </div>
       </div>
