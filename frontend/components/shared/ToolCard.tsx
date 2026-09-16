@@ -14,25 +14,28 @@ interface ToolCardProps {
 
 export function ToolCard({ title, description, icon: Icon, href, color = "text-red-500", bgColor = "bg-red-50", badge }: ToolCardProps) {
   return (
-    <Link href={href} className="group block h-full">
-      <Card className="h-full bg-white transition-all duration-200 border-gray-200 shadow-sm hover:shadow-md relative overflow-hidden rounded-2xl">
-        <CardHeader className="pb-3 pt-6 px-6">
-          <div className="flex justify-between items-start mb-2">
-            <div className={`p-2 rounded-lg ${bgColor} ${color}`}>
-              <Icon className="w-8 h-8" strokeWidth={1.5} />
+    <Link 
+      href={href} 
+      className="group block h-full outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 rounded-2xl"
+    >
+      <Card className="h-full flex flex-col bg-white transition-all duration-300 border border-gray-200 shadow-sm hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:border-red-500/30 relative overflow-hidden rounded-2xl cursor-pointer">
+        <CardHeader className="p-6 pb-4">
+          <div className="flex justify-between items-start mb-4">
+            <div className={`p-3 rounded-xl ${bgColor} ${color} transition-transform duration-300 group-hover:scale-110 group-hover:shadow-sm`}>
+              <Icon className="w-7 h-7" strokeWidth={2} />
             </div>
             {badge && (
-              <span className="bg-blue-100 text-blue-700 text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wider">
+              <span className="bg-red-100 text-red-700 text-[11px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider">
                 {badge}
               </span>
             )}
           </div>
-          <CardTitle className="text-xl font-bold tracking-tight text-gray-900 group-hover:text-red-600 transition-colors">
+          <CardTitle className="text-[1.15rem] font-bold tracking-tight text-[#33333B] group-hover:text-red-500 transition-colors">
             {title}
           </CardTitle>
         </CardHeader>
-        <CardContent className="px-6 pb-6">
-          <CardDescription className="text-gray-500 text-sm leading-relaxed line-clamp-3">
+        <CardContent className="px-6 pb-6 pt-0 flex-1">
+          <CardDescription className="text-[#646470] text-[14px] leading-[1.6] line-clamp-3">
             {description}
           </CardDescription>
         </CardContent>

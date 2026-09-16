@@ -3,7 +3,7 @@ import {
   Edit3, Image as ImageIcon, PenTool, Stamp, RotateCw, Code,
   Unlock, Shield, LayoutGrid, FileBadge, Wrench, ListOrdered,
   Scan, ScanText, Columns, Eraser, Crop, FormInput,
-  Wand2, Languages, Braces, LucideIcon
+  Wand2, Languages, Braces, LucideIcon, Maximize, FileImage, MessageSquare
 } from "lucide-react";
 
 export type ToolCategory = "pdf" | "image" | "ai";
@@ -131,7 +131,7 @@ export const tools: ToolMetadata[] = [
   },
   {
     slug: "watermark",
-    title: "Watermark",
+    title: "Watermark PDF",
     description: "Stamp an image or text over your PDF in seconds.",
     category: "pdf", categories: ["Edit PDF"],
     icon: Stamp, color: "text-red-500", bgColor: "bg-red-50",
@@ -195,7 +195,7 @@ export const tools: ToolMetadata[] = [
   },
   {
     slug: "page-numbers",
-    title: "Page numbers",
+    title: "Page Numbers",
     description: "Add page numbers into PDFs with ease.",
     category: "pdf", categories: ["Edit PDF", "Organize PDF"],
     icon: ListOrdered, color: "text-purple-600", bgColor: "bg-purple-100",
@@ -274,7 +274,30 @@ export const tools: ToolMetadata[] = [
     icon: Braces, color: "text-purple-500", bgColor: "bg-purple-50", badge: "New!",
     accept: ".pdf", maxSizeMB: 10, actionType: "basic", allowMultiple: false,
   },
-
+  {
+    slug: "resize-pdf",
+    title: "Resize PDF",
+    description: "Change the size and dimensions of your PDF pages.",
+    category: "pdf", categories: ["Edit PDF", "Organize PDF"],
+    icon: Maximize, color: "text-blue-500", bgColor: "bg-blue-50", badge: "New!",
+    accept: ".pdf", maxSizeMB: 10, actionType: "resize", allowMultiple: false,
+  },
+  {
+    slug: "pdf-to-png",
+    title: "PDF to PNG",
+    description: "Convert PDF pages to PNG images or extract images.",
+    category: "pdf", categories: ["Convert PDF"],
+    icon: FileImage, color: "text-green-500", bgColor: "bg-green-50", badge: "New!",
+    accept: ".pdf", maxSizeMB: 10, actionType: "basic", allowMultiple: false,
+  },
+  {
+    slug: "chat-with-pdf",
+    title: "Chat with PDF",
+    description: "Upload your PDF and ask questions using AI to extract key insights.",
+    category: "ai", categories: ["PDF Intelligence"],
+    icon: MessageSquare, color: "text-purple-600", bgColor: "bg-purple-100", badge: "New!",
+    accept: ".pdf", maxSizeMB: 10, actionType: "chat", allowMultiple: false,
+  },
 
 ];
 

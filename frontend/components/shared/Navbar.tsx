@@ -1,11 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Menu, X, ChevronDown } from "lucide-react";
 import { tools, ToolMetadata } from "@/config/tools";
-import { useAuth } from "@/context/AuthContext";
+import { useSelector, useDispatch } from "react-redux";
+import { checkAuth, logoutUser } from "@/store/slices/authSlice";
+import { RootState, AppDispatch } from "@/store/store";
+import { Logo } from "@/components/shared/Logo";
 
 const getTools = (slugs: string[]) => slugs.map(s => tools.find(t => t.slug === s)).filter(Boolean) as ToolMetadata[];
 
@@ -40,7 +43,16 @@ const megaMenuColumns = [
 
 export function Navbar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const { user, isLoading, logout } = useAuth();
+  const dispatch = useDispatch<AppDispatch>();
+  const { user, isLoading } = useSelector((state: RootState) => state.auth);
+  
+  useEffect(() => {
+    dispatch(checkAuth());
+  }, [dispatch]);
+
+  const logout = () => {
+    dispatch(logoutUser());
+  };
 
   return (
     <header className="sticky top-0 z-50 w-full bg-white border-b border-[#E5E5E5]">
@@ -48,12 +60,10 @@ export function Navbar() {
         
         {/* Left Side: Logo & Main Links */}
         <div className="flex items-center h-full">
-          <Link href="/" className="flex items-center gap-2 mr-6 xl:mr-10">
-            <div className="bg-[#E5322D] text-white rounded-md p-1.5">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
-            </div>
-            <span className="font-extrabold text-[22px] tracking-tight text-[#33333B]">
-              PDF Platform
+          <Link href="/" className="flex items-center gap-2.5 mr-6 xl:mr-10">
+            <Logo className="w-[36px] h-[36px]" />
+            <span className="font-extrabold text-xl sm:text-2xl tracking-tight text-[#33333B]">
+              QuickPDF
             </span>
           </Link>
 

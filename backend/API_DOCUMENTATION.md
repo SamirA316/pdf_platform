@@ -142,6 +142,139 @@ Clears the HTTP-only cookie, logging the user out.
 ### Success Response (200 OK)
 ```json
 {
-  "message": "Logged out successfully"
+}
+```
+
+---
+
+## 6. Upload a Document
+Upload a PDF file for storage.
+
+- **Endpoint:** `/api/documents/upload`
+- **Method:** `POST`
+- **Headers:** `Content-Type: multipart/form-data`
+- **Credentials:** `include`
+
+### Request Body (FormData)
+- `file`: The PDF file to upload (Max 10MB)
+
+### Success Response (201 Created)
+```json
+{
+  "message": "File uploaded successfully",
+  "document": {
+    "id": "doc-uuid",
+    "filename": "file-123.pdf",
+    "originalName": "resume.pdf",
+    "size": 102450,
+    "type": "UPLOAD"
+  }
+}
+```
+
+---
+
+## 7. Get User Documents
+Fetch all documents belonging to the authenticated user.
+
+- **Endpoint:** `/api/documents`
+- **Method:** `GET`
+- **Credentials:** `include`
+
+### Success Response (200 OK)
+```json
+{
+  "documents": [
+    {
+      "id": "doc-uuid",
+      "filename": "file-123.pdf",
+      "originalName": "resume.pdf",
+      "size": 102450,
+      "type": "UPLOAD",
+      "createdAt": "2026-09-14T10:00:00.000Z"
+    }
+  ]
+}
+```
+
+---
+
+## 8. Delete a Document
+Deletes a document from the database and the server's file system.
+
+- **Endpoint:** `/api/documents/:id`
+- **Method:** `DELETE`
+- **Credentials:** `include`
+
+### Success Response (200 OK)
+```json
+{
+  "message": "Document deleted successfully"
+}
+```
+
+---
+
+## 9. Download a Document
+Securely downloads a physical PDF file. This can be used in an `<a>` tag or fetched as a Blob.
+
+- **Endpoint:** `/api/documents/download/:id`
+- **Method:** `GET`
+- **Credentials:** `include`
+
+### Success Response (200 OK)
+Returns the raw binary file with `Content-Type: application/pdf`.
+
+---
+
+## 10. Merge PDFs
+Upload multiple PDFs and merge them into a single PDF.
+
+- **Endpoint:** `/api/pdf/merge`
+- **Method:** `POST`
+- **Headers:** `Content-Type: multipart/form-data`
+- **Credentials:** `include`
+
+### Request Body (FormData)
+- `files`: Multiple PDF files (Array of files)
+
+### Success Response (201 Created)
+```json
+{
+  "message": "PDFs merged successfully",
+  "document": {
+    "id": "doc-uuid",
+    "filename": "merged-123.pdf",
+    "originalName": "merged-document.pdf",
+    "type": "MERGED"
+  }
+}
+```
+
+---
+
+## 11. Split PDF
+Upload a single PDF and specify the start and end pages to extract a specific range.
+
+- **Endpoint:** `/api/pdf/split`
+- **Method:** `POST`
+- **Headers:** `Content-Type: multipart/form-data`
+- **Credentials:** `include`
+
+### Request Body (FormData)
+- `file`: The single PDF file to split
+- `startPage`: Number (e.g., "1")
+- `endPage`: Number (e.g., "3")
+
+### Success Response (201 Created)
+```json
+{
+  "message": "PDF split successfully",
+  "document": {
+    "id": "doc-uuid",
+    "filename": "split-123.pdf",
+    "originalName": "split-original.pdf",
+    "type": "SPLIT"
+  }
 }
 ```

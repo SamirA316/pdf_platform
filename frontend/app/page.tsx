@@ -27,32 +27,49 @@ export default function Home() {
 
       <main className="flex-1">
         {/* HERO SECTION */}
-        <section className="pt-12 pb-6 px-4 sm:px-6 lg:px-8 text-center max-w-5xl mx-auto">
+        <section className="pt-12 pb-8 px-4 sm:px-6 lg:px-8 text-center max-w-5xl mx-auto">
           <h1 className="text-4xl md:text-[52px] font-bold tracking-tight text-[#33333B] mb-4 leading-tight">
-            The Ultimate PDF Toolkit for all your document needs
+            Every tool you need to work with PDFs
           </h1>
-          <p className="text-lg md:text-xl text-[#4A4A55] mb-8 max-w-3xl mx-auto font-medium">
-            Manage, edit, and transform your PDFs instantly. Fast, secure, and incredibly simple to use. Merge, compress, convert, and sign your documents without any hassle.
+          <p className="text-lg md:text-xl text-[#4A4A55] mb-6 max-w-3xl mx-auto font-medium">
+            Merge, split, compress, convert, rotate, unlock and watermark PDFs with just a few clicks. Secure and fast processing.
           </p>
-
         </section>
 
         {/* Filters */}
-        <section id="tools" className="px-4 sm:px-6 lg:px-8 max-w-[1400px] mx-auto w-full mb-6">
-          <div className="flex justify-start md:justify-center w-full">
-            <div className="flex overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] gap-2 pb-2 w-full md:w-max md:max-w-full">
-              {filters.map((filter) => (
-                <button
-                  key={filter}
-                  onClick={() => setActiveFilter(filter)}
-                  className={`px-5 py-2 rounded-full text-sm font-semibold transition-colors shrink-0 whitespace-nowrap ${activeFilter === filter
-                    ? 'bg-[#33333B] text-white'
-                    : 'bg-white text-[#4A4A55] border border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+        <section id="tools" className="px-4 sm:px-6 lg:px-8 max-w-[1400px] mx-auto w-full mb-8">
+          <div className="flex justify-start md:justify-center w-full relative">
+            {/* Fade edges for mobile scrolling */}
+            <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-[#FDFDFD] to-transparent z-10 md:hidden pointer-events-none" />
+            <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-[#FDFDFD] to-transparent z-10 md:hidden pointer-events-none" />
+            
+            <div className="flex overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] gap-2 md:gap-3 pb-2 w-full md:w-max md:max-w-full px-2 scroll-smooth">
+              {filters.map((filter) => {
+                const count = getToolsByFilter(filter).length;
+                const isActive = activeFilter === filter;
+                return (
+                  <button
+                    key={filter}
+                    onClick={() => setActiveFilter(filter)}
+                    className={`relative px-5 py-2.5 rounded-2xl text-[14px] font-bold transition-all duration-300 shrink-0 whitespace-nowrap overflow-hidden group ${
+                      isActive
+                        ? 'bg-[#E5322D] text-white shadow-md'
+                        : 'bg-white text-[#4A4A55] border border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                     }`}
-                >
-                  {filter}
-                </button>
-              ))}
+                  >
+                    {/* Active State Background Animation */}
+                    {isActive && (
+                      <span className="absolute inset-0 bg-black/10 rounded-2xl opacity-0 hover:opacity-100 transition-opacity" />
+                    )}
+                    <span className="relative z-10 flex items-center gap-2">
+                      {filter}
+                      <span className={`text-[11px] px-2 py-0.5 rounded-full transition-colors ${isActive ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500 group-hover:bg-gray-200'}`}>
+                        {count}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </section>
@@ -220,11 +237,11 @@ export default function Home() {
               Ready to simplify your document workflow?
             </h2>
             <p className="text-xl text-slate-300 mb-10 max-w-2xl mx-auto font-medium">
-              Join millions of users who trust our platform to manage, edit, and convert their PDFs securely and instantly.
+              Join thousands of users who trust our platform to manage, edit, and convert their PDFs securely and instantly.
             </p>
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link href="/tools">
+              <Link href="/signup">
                 <Button className="bg-red-500 hover:bg-red-600 text-white font-bold text-lg px-10 py-7 rounded-full transition-all hover:scale-105 shadow-[0_0_40px_rgba(239,68,68,0.4)]">
                   Start for Free
                 </Button>
@@ -237,7 +254,7 @@ export default function Home() {
             </div>
 
             <p className="mt-8 text-sm text-slate-400 font-medium">
-              No credit card required • Secure 256-bit encryption • Auto-delete after 2 hours
+              Free to use • Secure local processing • No hidden fees
             </p>
           </div>
         </section>

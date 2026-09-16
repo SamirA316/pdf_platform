@@ -1,43 +1,43 @@
 import { CheckCircle2, Download, RefreshCw, FileWarning } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-export function ProgressState({ fileName }: { fileName: string }) {
+export function ProgressState({ fileName, action = "Processing" }: { fileName: string, action?: string }) {
   return (
-    <div className="w-full max-w-3xl mx-auto rounded-2xl border border-border bg-card p-12 text-center shadow-sm">
+    <div className="w-full max-w-3xl mx-auto rounded-3xl border border-gray-100 bg-white p-12 text-center shadow-sm">
       <div className="flex flex-col items-center justify-center space-y-6">
         <div className="relative">
-          <div className="w-16 h-16 border-4 border-secondary rounded-full"></div>
-          <div className="absolute top-0 left-0 w-16 h-16 border-4 border-primary rounded-full border-t-transparent animate-spin"></div>
+          <div className="w-16 h-16 border-4 border-gray-100 rounded-full"></div>
+          <div className="absolute top-0 left-0 w-16 h-16 border-4 border-[#E5322D] rounded-full border-t-transparent animate-spin"></div>
         </div>
         <div>
-          <h3 className="text-xl font-semibold text-foreground">Processing {fileName}...</h3>
-          <p className="text-muted-foreground mt-2">Please wait while we compress your file.</p>
+          <h3 className="text-xl font-bold text-[#33333B]">{action} {fileName}...</h3>
+          <p className="text-gray-500 mt-2 font-medium">Please wait while we complete this action.</p>
         </div>
       </div>
     </div>
   );
 }
 
-export function ResultCard({ fileName, savedBytes }: { fileName: string, savedBytes: string }) {
+export function ResultCard({ fileName, savedBytes, actionDone = "Task Complete!" }: { fileName: string, savedBytes?: string, actionDone?: string }) {
   return (
-    <div className="w-full max-w-3xl mx-auto rounded-3xl border border-border bg-card p-12 text-center shadow-sm">
+    <div className="w-full max-w-3xl mx-auto rounded-3xl border border-gray-100 bg-white p-12 text-center shadow-sm">
       <div className="flex flex-col items-center justify-center space-y-6">
-        <div className="w-28 h-28 bg-green-500 text-white rounded-full flex items-center justify-center mb-6 shadow-lg shadow-green-500/30 ring-8 ring-green-500/10">
-          <CheckCircle2 className="w-14 h-14" strokeWidth={3} />
+        <div className="w-24 h-24 bg-green-500 text-white rounded-full flex items-center justify-center mb-2 shadow-[0_10px_30px_rgba(34,197,94,0.3)] ring-8 ring-green-50">
+          <CheckCircle2 className="w-12 h-12" strokeWidth={3} />
         </div>
         <div>
-          <h3 className="text-2xl font-bold text-foreground">Compression Complete!</h3>
-          <p className="text-muted-foreground mt-2">
-            Successfully compressed <span className="font-semibold text-foreground">{fileName}</span>. 
-            You saved <span className="font-semibold text-success">{savedBytes}</span>!
+          <h3 className="text-3xl font-extrabold text-[#33333B]">{actionDone}</h3>
+          <p className="text-gray-500 mt-3 text-lg">
+            Successfully processed <span className="font-bold text-[#33333B]">{fileName}</span>. 
+            {savedBytes && <span className="font-semibold text-green-600 ml-1">You saved {savedBytes}!</span>}
           </p>
         </div>
-        <div className="flex gap-4 mt-4">
-          <Button className="h-10 rounded-[10px] px-8 gap-2 font-bold shadow-sm">
-            <Download className="w-4 h-4" /> Download File
+        <div className="flex flex-col sm:flex-row gap-4 mt-6">
+          <Button className="bg-[#E5322D] hover:bg-[#CC2A26] h-14 rounded-xl px-10 gap-2 font-bold text-lg shadow-lg active:scale-95 transition-transform">
+            <Download className="w-5 h-5" strokeWidth={2.5} /> Download File
           </Button>
-          <Button variant="outline" className="h-10 rounded-[10px] px-8 gap-2 font-bold border-border shadow-sm">
-            <RefreshCw className="w-4 h-4" /> Process Another
+          <Button variant="outline" className="h-14 rounded-xl px-10 gap-2 font-bold text-lg text-[#4A4A55] border-gray-200 hover:bg-gray-50 hover:text-[#33333B] active:scale-95 transition-transform">
+            <RefreshCw className="w-5 h-5" strokeWidth={2.5} /> Start Over
           </Button>
         </div>
       </div>
@@ -47,16 +47,16 @@ export function ResultCard({ fileName, savedBytes }: { fileName: string, savedBy
 
 export function ErrorState({ message, onRetry }: { message: string, onRetry: () => void }) {
   return (
-    <div className="w-full max-w-3xl mx-auto rounded-2xl border border-destructive/20 bg-destructive/5 p-12 text-center shadow-sm">
+    <div className="w-full max-w-3xl mx-auto rounded-3xl border border-red-100 bg-red-50/50 p-12 text-center shadow-sm">
       <div className="flex flex-col items-center justify-center space-y-6">
-        <div className="w-16 h-16 bg-destructive/10 text-destructive rounded-full flex items-center justify-center mb-2">
-          <FileWarning className="w-8 h-8" strokeWidth={2} />
+        <div className="w-20 h-20 bg-red-100 text-red-600 rounded-full flex items-center justify-center mb-2">
+          <FileWarning className="w-10 h-10" strokeWidth={2} />
         </div>
         <div>
-          <h3 className="text-xl font-bold text-destructive">Upload Failed</h3>
-          <p className="text-muted-foreground mt-2">{message}</p>
+          <h3 className="text-2xl font-extrabold text-red-700">Something went wrong</h3>
+          <p className="text-red-600/80 mt-2 text-lg max-w-lg font-medium">{message}</p>
         </div>
-        <Button onClick={onRetry} variant="outline" className="h-10 rounded-[10px] px-8 mt-4 font-bold border-destructive/20 hover:bg-destructive/10 text-destructive hover:text-destructive shadow-sm">
+        <Button onClick={onRetry} className="bg-red-600 hover:bg-red-700 h-12 rounded-xl px-10 mt-4 font-bold text-white shadow-md active:scale-95 transition-transform">
           Try Again
         </Button>
       </div>
