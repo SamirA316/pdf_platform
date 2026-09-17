@@ -268,13 +268,165 @@ Upload a single PDF and specify the start and end pages to extract a specific ra
 
 ### Success Response (201 Created)
 ```json
+}
+```
+
+---
+
+## 12. Rotate PDF
+Rotate all pages of a PDF document by a specified angle.
+
+- **Endpoint:** `/api/pdf/rotate`
+- **Method:** `POST`
+- **Headers:** `Content-Type: multipart/form-data`
+- **Credentials:** `include`
+
+### Request Body (FormData)
+- `file`: The PDF file
+- `angle`: Number (e.g., "90", "180", "270")
+
+### Success Response (201 Created)
+```json
 {
-  "message": "PDF split successfully",
+  "message": "PDF rotated successfully",
   "document": {
     "id": "doc-uuid",
-    "filename": "split-123.pdf",
-    "originalName": "split-original.pdf",
-    "type": "SPLIT"
+    "filename": "rotated-123.pdf",
+    "originalName": "rotated-original.pdf",
+    "type": "ROTATED"
+  }
+}
+```
+
+---
+
+## 13. Organize PDF
+Reorder or delete pages in a PDF document.
+
+- **Endpoint:** `/api/pdf/organize`
+- **Method:** `POST`
+- **Headers:** `Content-Type: multipart/form-data`
+- **Credentials:** `include`
+
+### Request Body (FormData)
+- `file`: The PDF file
+- `pageOrder`: Stringified JSON array of 1-indexed page numbers (e.g., "[3, 1, 2]")
+
+### Success Response (201 Created)
+```json
+{
+  "message": "PDF organized successfully",
+  "document": {
+    "id": "doc-uuid",
+    "filename": "organized-123.pdf",
+    "originalName": "organized-original.pdf",
+    "type": "ORGANIZED"
+  }
+}
+```
+
+---
+
+## 14. Watermark PDF
+Add text watermark diagonally across all pages of a PDF.
+
+- **Endpoint:** `/api/pdf/watermark`
+- **Method:** `POST`
+- **Headers:** `Content-Type: multipart/form-data`
+- **Credentials:** `include`
+
+### Request Body (FormData)
+- `file`: The PDF file
+- `text`: String to be used as watermark (e.g., "CONFIDENTIAL")
+
+### Success Response (201 Created)
+```json
+{
+  "message": "PDF watermarked successfully",
+  "document": {
+    "id": "doc-uuid",
+    "filename": "watermarked-123.pdf",
+    "originalName": "watermarked-original.pdf",
+    "type": "WATERMARKED"
+  }
+}
+```
+
+---
+
+## 15. Page Numbers PDF
+Add page numbers to the bottom center of each page.
+
+- **Endpoint:** `/api/pdf/page-numbers`
+- **Method:** `POST`
+- **Headers:** `Content-Type: multipart/form-data`
+- **Credentials:** `include`
+
+### Request Body (FormData)
+- `file`: The PDF file
+
+### Success Response (201 Created)
+```json
+{
+  "message": "Page numbers added successfully",
+  "document": {
+    "id": "doc-uuid",
+    "filename": "numbered-123.pdf",
+    "originalName": "numbered-original.pdf",
+    "type": "NUMBERED"
+  }
+}
+```
+
+---
+
+## 16. JPG/PNG to PDF
+Convert multiple image files into a single PDF document.
+
+- **Endpoint:** `/api/pdf/image-to-pdf`
+- **Method:** `POST`
+- **Headers:** `Content-Type: multipart/form-data`
+- **Credentials:** `include`
+
+### Request Body (FormData)
+- `files`: Multiple image files (`.jpg`, `.jpeg`, `.png`)
+
+### Success Response (201 Created)
+```json
+{
+  "message": "Images converted to PDF successfully",
+  "document": {
+    "id": "doc-uuid",
+    "filename": "from-images-123.pdf",
+    "originalName": "converted-images.pdf",
+    "type": "IMAGE_TO_PDF"
+  }
+}
+```
+
+---
+
+## 17. Resize PDF
+Resize PDF pages to a specified dimension. (Note: Only resizes the page boundaries, not actual content scaling).
+
+- **Endpoint:** `/api/pdf/resize`
+- **Method:** `POST`
+- **Headers:** `Content-Type: multipart/form-data`
+- **Credentials:** `include`
+
+### Request Body (FormData)
+- `file`: The PDF file
+- `size`: String (e.g., "A4" or "Letter")
+
+### Success Response (201 Created)
+```json
+{
+  "message": "PDF resized successfully",
+  "document": {
+    "id": "doc-uuid",
+    "filename": "resized-123.pdf",
+    "originalName": "resized-original.pdf",
+    "type": "RESIZED"
   }
 }
 ```
