@@ -8,6 +8,7 @@ import { CheckCircle2, AlertCircle, Eye, EyeOff } from "lucide-react";
 import { useDispatch } from "react-redux";
 import { login } from "@/store/slices/authSlice";
 import { Logo } from "@/components/shared/Logo";
+import { apiClient } from "@/lib/apiClient";
 
 export default function LoginPage() {
   const [formData, setFormData] = useState({ email: "", password: "" });
@@ -47,18 +48,9 @@ export default function LoginPage() {
     if (validate()) {
       setLoading(true);
       try {
-        const res = await fetch("http://localhost:3001/api/auth/login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(formData),
-          credentials: "include",
+        const data = await apiClient("/api/auth/login", {
+          data: formData,
         });
-
-        const data = await res.json();
-
-        if (!res.ok) {
-          throw new Error(data.error || "Login failed");
-        }
 
         dispatch(login(data.user));
         router.push("/");

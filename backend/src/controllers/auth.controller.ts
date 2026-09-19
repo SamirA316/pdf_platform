@@ -120,7 +120,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
         password: hashedPassword,
         otp,
         otpExpires,
-        isVerified: false,
+        isVerified: process.env.NODE_ENV !== "production", // Auto-verify in development so user doesn't get stuck with OTP
       },
     });
 
@@ -218,6 +218,10 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       res.status(403).json({ error: "Please verify your email before logging in" });
       return;
     }
+    if (!user.password) {
+      res.status(400).json({ error: "Please login with OAuth provider" });
+      return;
+    }
 
     const isValidPassword = await bcrypt.compare(password, user.password);
     if (!isValidPassword) {
@@ -271,7 +275,7 @@ export const logout = (req: Request, res: Response): void => {
 
 export const mockOAuthLogin = async (req: Request, res: Response): Promise<void> => {
   try {
-    const provider = req.params.provider.toUpperCase();
+    const provider = (req.params.provider as string)?.toUpperCase();
     const email = `mock_${provider.toLowerCase()}@example.com`;
 
     let user = await prisma.user.findUnique({ where: { email } });

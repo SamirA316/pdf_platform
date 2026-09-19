@@ -26,49 +26,14 @@ export function ResizeConfig({ files, onProcess }: ResizeConfigProps) {
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-6 mb-6">
-        <div>
-          <label className="block text-sm font-medium text-foreground mb-2">Width (px)</label>
-          <input
-            type="number"
-            value={width}
-            onChange={(e) => setWidth(e.target.value)}
-            className="w-full px-4 py-3 rounded-xl border border-border bg-background text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-            placeholder="e.g. 1920"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-foreground mb-2">Height (px)</label>
-          <input
-            type="number"
-            value={height}
-            onChange={(e) => setHeight(e.target.value)}
-            className="w-full px-4 py-3 rounded-xl border border-border bg-background text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-            placeholder="e.g. 1080"
-          />
-        </div>
-      </div>
-
-      <div className="flex items-center mb-8">
-        <input
-          type="checkbox"
-          id="ratio"
-          checked={maintainRatio}
-          onChange={(e) => setMaintainRatio(e.target.checked)}
-          className="w-4 h-4 rounded border-border text-primary focus:ring-primary"
-        />
-        <label htmlFor="ratio" className="ml-2 text-sm text-foreground">
-          Maintain aspect ratio
-        </label>
-      </div>
+        {/* Removed width and height fields as backend expects "size" string like "A4" or "Letter" */}
 
       <div className="flex justify-center">
         <Button 
-          onClick={() => onProcess({ width, height, maintainRatio })} 
+          onClick={() => onProcess({ size: "A4" })} 
           className="w-full h-10 rounded-lg font-bold shadow-sm"
-          disabled={!width && !height}
         >
-          Resize Image
+          Resize PDF to A4
         </Button>
       </div>
     </div>

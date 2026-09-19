@@ -8,6 +8,7 @@ import { CheckCircle2, AlertCircle, Eye, EyeOff } from "lucide-react";
 import { useDispatch } from "react-redux";
 import { login } from "@/store/slices/authSlice";
 import { Logo } from "@/components/shared/Logo";
+import { apiClient } from "@/lib/apiClient";
 
 export default function SignupPage() {
   const [formData, setFormData] = useState({ name: "", email: "", password: "", confirmPassword: "" });
@@ -67,18 +68,9 @@ export default function SignupPage() {
     if (validate()) {
       setLoading(true);
       try {
-        const res = await fetch("http://localhost:3001/api/auth/register", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: formData.name, email: formData.email, password: formData.password }),
-          credentials: "include",
+        await apiClient("/api/auth/register", {
+          data: { name: formData.name, email: formData.email, password: formData.password },
         });
-
-        const data = await res.json();
-
-        if (!res.ok) {
-          throw new Error(data.error || "Registration failed");
-        }
 
         setRegisteredEmail(formData.email);
         setStep(2);
@@ -103,18 +95,9 @@ export default function SignupPage() {
 
     setLoading(true);
     try {
-      const res = await fetch("http://localhost:3001/api/auth/verify-otp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: registeredEmail, otp }),
-        credentials: "include",
+      const data = await apiClient("/api/auth/verify-otp", {
+        data: { email: registeredEmail, otp },
       });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || "Verification failed");
-      }
 
       dispatch(login(data.user));
       router.push("/");

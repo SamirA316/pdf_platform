@@ -1,4 +1,5 @@
 import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
+import { apiClient } from "@/lib/apiClient";
 
 export interface User {
   id: string;
@@ -20,19 +21,10 @@ export const checkAuth = createAsyncThunk(
   "auth/checkAuth",
   async (_, { rejectWithValue }) => {
     try {
-      const res = await fetch("http://localhost:3001/api/auth/me", {
-        method: "GET",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-      });
-      if (res.ok) {
-        const data = await res.json();
-        return data.user as User;
-      } else {
-        return rejectWithValue("Unauthorized");
-      }
+      const data = await apiClient("/api/auth/me");
+      return data.user as User;
     } catch (error) {
-      return rejectWithValue("Network error");
+      return rejectWithValue("Unauthorized");
     }
   }
 );
@@ -41,15 +33,9 @@ export const logoutUser = createAsyncThunk(
   "auth/logoutUser",
   async (_, { rejectWithValue }) => {
     try {
-      const res = await fetch("http://localhost:3001/api/auth/logout", {
-        method: "POST",
-        credentials: "include",
-      });
-      if (!res.ok) {
-        return rejectWithValue("Logout failed");
-      }
+      await apiClient("/api/auth/logout", { method: "POST" });
     } catch (error) {
-      return rejectWithValue("Network error");
+      return rejectWithValue("Logout failed");
     }
   }
 );
