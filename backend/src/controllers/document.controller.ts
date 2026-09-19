@@ -53,7 +53,7 @@ export const getDocuments = async (req: AuthRequest, res: Response): Promise<voi
 export const deleteDocument = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.userId as string;
-    const documentId = req.params.id;
+    const documentId = req.params.id as string;
 
     const document = await prisma.document.findUnique({
       where: { id: documentId },
@@ -89,7 +89,7 @@ export const deleteDocument = async (req: AuthRequest, res: Response): Promise<v
 export const downloadDocument = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.userId as string;
-    const documentId = req.params.id;
+    const documentId = req.params.id as string;
 
     const document = await prisma.document.findUnique({
       where: { id: documentId },

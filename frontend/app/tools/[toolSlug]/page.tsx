@@ -35,6 +35,7 @@ export default async function ToolPage({ params }: PageProps) {
 
            <div className="mt-12">
              <ToolWorkspace 
+               slug={tool.slug}
                accept={tool.accept} 
                maxSizeMB={tool.maxSizeMB} 
                actionType={tool.actionType}
