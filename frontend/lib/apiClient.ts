@@ -47,7 +47,22 @@ export async function apiClient<T = any>(
     }
 
     if (!response.ok) {
-      throw new Error(responseData?.error || responseData || "API Error");
+      let errorMessage = responseData?.error;
+      if (!errorMessage && typeof responseData === "string") {
+        const preMatch = responseData.match(/<pre[^>]*>([\s\S]*?)<\/pre>/i);
+        if (preMatch && preMatch[1]) {
+          errorMessage = preMatch[1]
+            .replace(/<br\s*[\/]?>/gi, "\n")
+            .replace(/&nbsp;/gi, " ")
+            .split("\n")[0] // First line of stack trace/error
+            .trim();
+        } else if (responseData.includes("<html") || responseData.includes("<!DOCTYPE")) {
+          errorMessage = `Server returned an error (${response.status}). Please try again.`;
+        } else {
+          errorMessage = responseData;
+        }
+      }
+      throw new Error(errorMessage || "API Error");
     }
 
     return responseData as T;

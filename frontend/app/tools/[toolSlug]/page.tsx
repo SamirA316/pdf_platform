@@ -18,12 +18,14 @@ export default async function ToolPage({ params }: PageProps) {
   }
 
 
+  const isWideWorkspace = resolvedParams.toolSlug === "edit-pdf" || resolvedParams.toolSlug === "organize-pdf";
+
   return (
     <div className="flex flex-col min-h-screen bg-[#F3F4F5]">
       <Navbar />
       
       <main className="flex-1 pt-16 pb-24">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
+        <div className={`${isWideWorkspace ? "max-w-7xl" : "max-w-4xl"} mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10`}>
            
            <h1 className="text-4xl md:text-[56px] font-extrabold tracking-tight text-[#33333B] mb-4">
              {tool.title}

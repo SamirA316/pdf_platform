@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { register, login, me, logout, verifyOTP, oauthCallback, mockOAuthLogin } from "../controllers/auth.controller";
-import { requireAuth } from "../middlewares/auth.middleware";
+import { requireStrictAuth } from "../middlewares/auth.middleware";
 import passport from "passport";
 
 const router = Router();
@@ -8,7 +8,7 @@ const router = Router();
 router.post("/register", register);
 router.post("/verify-otp", verifyOTP);
 router.post("/login", login);
-router.get("/me", requireAuth, me);
+router.get("/me", requireStrictAuth, me);
 router.post("/logout", logout);
 
 // Check if we are running without real API keys

@@ -10,10 +10,12 @@ import { ResizeConfig } from "@/components/tools/ResizeConfig";
 import { ChatConfig } from "@/components/tools/ChatConfig";
 import { BasicConfig } from "@/components/tools/BasicConfig";
 import { RotateConfig } from "@/components/tools/RotateConfig";
-import { apiClient } from "@/lib/apiClient";
+import { API_BASE_URL, apiClient } from "@/lib/apiClient";
+import { useRouter } from "next/navigation";
 import { SplitConfig } from "@/components/tools/SplitConfig";
 import { WatermarkConfig } from "@/components/tools/WatermarkConfig";
 import { OrganizeConfig } from "@/components/tools/OrganizeConfig";
+import { EditConfig } from "@/components/tools/EditConfig";
 
 type FlowState = "upload" | "configure" | "processing" | "result" | "error";
 
@@ -21,7 +23,7 @@ interface ToolWorkspaceProps {
   slug: string;
   accept: string;
   maxSizeMB: number;
-  actionType: "compress" | "merge" | "protect" | "resize" | "chat" | "rotate" | "basic";
+  actionType: "compress" | "merge" | "protect" | "resize" | "chat" | "rotate" | "edit" | "basic";
   allowMultiple: boolean;
   title: string;
 }
@@ -30,6 +32,12 @@ export function ToolWorkspace({ slug, accept, maxSizeMB, actionType, allowMultip
   const [flowState, setFlowState] = useState<FlowState>("upload");
   const [files, setFiles] = useState<File[]>([]);
   const [resultId, setResultId] = useState<string | null>(null);
+  const [resultFileName, setResultFileName] = useState<string | null>(null);
+  const [compressionSavedText, setCompressionSavedText] = useState<string | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [processError, setProcessError] = useState<{ message: string; isAuth?: boolean } | null>(null);
+  const router = useRouter();
 
   const handleUpload = (newFiles: FileList | null) => {
     if (newFiles && newFiles.length > 0) {
@@ -92,15 +100,19 @@ export function ToolWorkspace({ slug, accept, maxSizeMB, actionType, allowMultip
     }
   };
 
-  const handleProcess = async (config?: Record<string, unknown>) => {
+  const handleProcess = async (config?: Record<string, unknown>, customFile?: File) => {
     setFlowState("processing");
+    setProcessError(null);
+    setDownloadError(null);
     try {
       const formData = new FormData();
+      const filesToUpload = customFile ? [customFile] : files;
       
-      if (allowMultiple || actionType === "merge") {
-        files.forEach(f => formData.append("files", f));
-      } else {
-        formData.append("file", files[0]);
+      if (filesToUpload && filesToUpload.length > 0) {
+        filesToUpload.forEach(f => formData.append("files", f));
+        if (filesToUpload[0]) {
+          formData.append("file", filesToUpload[0]);
+        }
       }
 
       if (config) {
@@ -119,20 +131,112 @@ export function ToolWorkspace({ slug, accept, maxSizeMB, actionType, allowMultip
         data: formData,
       });
 
-      if (response.document && response.document.id) {
-        setResultId(response.document.id);
+      if (response.document) {
+        if (response.document.id) {
+          setResultId(response.document.id);
+        }
+        if (response.document.originalName) {
+          setResultFileName(response.document.originalName);
+        }
+      }
+
+      if (response.savedPercentage !== undefined && response.savedPercentage > 0 && response.savedBytes) {
+        const formatBytes = (bytes: number) => {
+          if (bytes < 1024) return `${bytes} B`;
+          if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+          return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+        };
+        setCompressionSavedText(`${response.savedPercentage}% (${formatBytes(response.savedBytes)})`);
+      } else if (actionType === "compress") {
+        setCompressionSavedText("Optimized");
+      } else {
+        setCompressionSavedText(null);
       }
       
       setFlowState("result");
-    } catch (error) {
-      console.error(error);
+    } catch (error: any) {
+      console.error("Processing error:", error);
+      const msg = error?.message || "Failed to process document";
+      const isAuth = msg.toLowerCase().includes("unauthorized") || msg.toLowerCase().includes("login");
+      setProcessError({
+        message: isAuth 
+          ? "You must be logged in to process documents. Please sign in or create an account."
+          : msg,
+        isAuth,
+      });
       setFlowState("error");
+    }
+  };
+
+  const handleDownload = async () => {
+    if (!resultId) {
+      setDownloadError("No file ready for download. Please process your file again or start over.");
+      return;
+    }
+    setIsDownloading(true);
+    setDownloadError(null);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/documents/download/${resultId}`, {
+        method: "GET",
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        let errMsg = "Download failed";
+        try {
+          const data = await response.json();
+          if (data.error) errMsg = data.error;
+        } catch {
+          errMsg = `Server returned status ${response.status}`;
+        }
+        throw new Error(errMsg);
+      }
+
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+
+      // Extract filename from Content-Disposition if present
+      const disposition = response.headers.get("content-disposition");
+      let downloadName = resultFileName;
+      if (disposition && disposition.includes("filename=")) {
+        const match = disposition.match(/filename="?([^"]+)"?/);
+        if (match && match[1]) {
+          downloadName = match[1];
+        }
+      }
+      if (!downloadName) {
+        downloadName = files.length > 1
+          ? `Processed_${files.length}_files.pdf`
+          : `processed_${files[0]?.name || "document.pdf"}`;
+      }
+
+      link.download = downloadName;
+      document.body.appendChild(link);
+      link.click();
+      setTimeout(() => {
+        try {
+          document.body.removeChild(link);
+          window.URL.revokeObjectURL(downloadUrl);
+        } catch {}
+      }, 1500);
+    } catch (err: any) {
+      console.error("Download error:", err);
+      setDownloadError(err?.message || "Failed to download document. Please ensure you are logged in.");
+    } finally {
+      setIsDownloading(false);
     }
   };
 
   const handleRetry = () => {
     setFlowState("upload");
     setFiles([]);
+    setResultId(null);
+    setResultFileName(null);
+    setCompressionSavedText(null);
+    setDownloadError(null);
+    setProcessError(null);
   };
 
   const renderConfig = () => {
@@ -147,14 +251,17 @@ export function ToolWorkspace({ slug, accept, maxSizeMB, actionType, allowMultip
       case "compress":
         return <CompressConfig files={files} onProcess={handleProcess} />;
       case "protect":
-        return <ProtectConfig files={files} onProcess={handleProcess} />;
+        return <ProtectConfig files={files} onProcess={handleProcess} slug={slug} />;
       case "resize":
         return <ResizeConfig files={files} onProcess={handleProcess} />;
       case "chat":
         return <ChatConfig files={files} onProcess={handleProcess} />;
       case "rotate":
         return <RotateConfig files={files} onProcess={handleProcess} />;
+      case "edit":
+        return <EditConfig files={files} onProcess={handleProcess} slug={slug} />;
       default:
+        if (slug === "edit-pdf" || slug === "sign-pdf") return <EditConfig files={files} onProcess={handleProcess} slug={slug} />;
         if (slug === "split-pdf") return <SplitConfig files={files} onProcess={handleProcess} />;
         if (slug === "watermark") return <WatermarkConfig files={files} onProcess={handleProcess} />;
         if (slug === "organize-pdf") return <OrganizeConfig files={files} onProcess={handleProcess} />;
@@ -186,21 +293,24 @@ export function ToolWorkspace({ slug, accept, maxSizeMB, actionType, allowMultip
       
       {flowState === "result" && (
         <div className="flex flex-col items-center gap-4 mt-8">
-          <ResultCard fileName={files.length > 1 ? `Processed_${files.length}_files.pdf` : files[0]?.name} savedBytes="Processed File" />
-          {resultId && (
-            <a href={`http://localhost:3001/api/documents/download/${resultId}`} target="_blank" rel="noreferrer" className="w-full max-w-sm">
-               <button className="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-4 rounded-xl shadow-md transition-colors">
-                 Download Processed File
-               </button>
-            </a>
-          )}
+          <ResultCard 
+            fileName={resultFileName || (files.length > 1 ? `Processed_${files.length}_files.pdf` : files[0]?.name)} 
+            savedBytes={compressionSavedText || undefined}
+            onDownload={handleDownload}
+            onStartOver={handleRetry}
+            isDownloading={isDownloading}
+            downloadError={downloadError}
+            downloadUrl={resultId ? `${API_BASE_URL}/api/documents/download/${resultId}` : null}
+          />
         </div>
       )}
       
       {flowState === "error" && (
         <ErrorState 
-          message={`A file exceeds the maximum allowed size of ${maxSizeMB}MB for free accounts. Please upgrade to Pro to process larger files.`}
+          message={processError?.message || `A file exceeds the maximum allowed size of ${maxSizeMB}MB for free accounts. Please upgrade to Pro to process larger files.`}
           onRetry={handleRetry} 
+          actionText={processError?.isAuth ? "Sign In" : undefined}
+          onAction={processError?.isAuth ? () => router.push("/login") : undefined}
         />
       )}
     </div>

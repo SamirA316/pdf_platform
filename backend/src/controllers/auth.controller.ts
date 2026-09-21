@@ -1,8 +1,8 @@
+import "dotenv/config";
 import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-
 import nodemailer, { Transporter } from "nodemailer";
 
 const prisma = new PrismaClient();
@@ -10,11 +10,12 @@ const JWT_SECRET = process.env.JWT_SECRET || "super-secret-jwt-key-replace-in-pr
 
 let transporter: Transporter;
 
-const initTransporter = async () => {
-  const isSmtpConfigured = process.env.SMTP_PASS && process.env.SMTP_PASS !== "your_app_password_here";
+const getTransporter = (): Transporter => {
+  if (transporter) return transporter;
+
+  const isSmtpConfigured = !!(process.env.SMTP_USER && process.env.SMTP_PASS && process.env.SMTP_PASS !== "your_app_password_here");
 
   if (isSmtpConfigured) {
-    console.log("Using Real SMTP Server (Gmail)...");
     transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST || "smtp.gmail.com",
       port: parseInt(process.env.SMTP_PORT || "587"),
@@ -24,34 +25,20 @@ const initTransporter = async () => {
         pass: process.env.SMTP_PASS,
       },
     });
-
-    try {
-      await transporter.verify();
-      console.log("SMTP Server successfully authenticated!");
-      return; // Success, exit the init function
-    } catch (err: any) {
-      console.error("CRITICAL: SMTP Authentication Failed. Check your App Password!", err.message);
-      console.log("Falling back to Ethereal Test Email System due to Gmail failure...");
-    }
+    console.log("Transporter initialized with Real SMTP Server (Gmail)");
   } else {
-    console.log("No real SMTP password found in .env. Falling back to Ethereal Test Email System...");
+    console.log("Falling back to standard nodemailer transporter...");
+    transporter = nodemailer.createTransport({
+      host: "smtp.ethereal.email",
+      port: 587,
+      auth: {
+        user: "ethereal@example.com",
+        pass: "ethereal",
+      },
+    });
   }
-
-  // Fallback Ethereal Setup
-  const account = await nodemailer.createTestAccount();
-  transporter = nodemailer.createTransport({
-    host: account.smtp.host,
-    port: account.smtp.port,
-    secure: account.smtp.secure,
-    auth: {
-      user: account.user,
-      pass: account.pass
-    }
-  });
-  console.log("Ethereal test account ready.");
+  return transporter;
 };
-
-initTransporter();
 
 const generateToken = (id: string) => {
   return jwt.sign({ id }, JWT_SECRET, { expiresIn: "7d" });
@@ -74,14 +61,14 @@ export const register = async (req: Request, res: Response): Promise<void> => {
 
     if (existingUser) {
       if (existingUser.isVerified) {
-        res.status(400).json({ error: "Email already in use" });
+        res.status(400).json({ error: "Email already registered. Please log in." });
         return;
       }
 
-      // If user exists but is NOT verified, we should just update their OTP and resend it
+      // If user exists but is NOT verified, update their OTP and resend it
       const otp = generateOTP();
       const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
-      const hashedPassword = await bcrypt.hash(password, 10); // Update password just in case they typed a new one
+      const hashedPassword = await bcrypt.hash(password, 10);
 
       await prisma.user.update({
         where: { id: existingUser.id },
@@ -93,19 +80,20 @@ export const register = async (req: Request, res: Response): Promise<void> => {
         },
       });
 
-      const info = await transporter.sendMail({
-        from: process.env.EMAIL_FROM || '"PDF Platform" <noreply@pdfplatform.com>',
+      console.log(`\n========================================`);
+      console.log(`🔑 [OTP RESENT] Code for ${email}: ${otp}`);
+      console.log(`========================================\n`);
+
+      const mailer = getTransporter();
+      await mailer.sendMail({
+        from: process.env.EMAIL_FROM || '"PDF Platform" <pdfplatform382@gmail.com>',
         to: email,
-        subject: "Verify your email",
+        subject: "Verify your email - PDF Platform",
         text: `Your verification code is: ${otp}`,
         html: `<b>Your verification code is: ${otp}</b>`,
       });
 
-      if (info.messageId && nodemailer.getTestMessageUrl(info)) {
-        console.log("Preview URL: %s", nodemailer.getTestMessageUrl(info));
-      }
-
-      res.status(201).json({ message: "New OTP sent to your email", userId: existingUser.id });
+      res.status(200).json({ message: "New OTP sent to your email", userId: existingUser.id });
       return;
     }
 
@@ -120,21 +108,22 @@ export const register = async (req: Request, res: Response): Promise<void> => {
         password: hashedPassword,
         otp,
         otpExpires,
-        isVerified: process.env.NODE_ENV !== "production", // Auto-verify in development so user doesn't get stuck with OTP
+        isVerified: false,
       },
     });
 
-    const info = await transporter.sendMail({
-      from: process.env.EMAIL_FROM || '"PDF Platform" <noreply@pdfplatform.com>',
+    console.log(`\n========================================`);
+    console.log(`🔑 [NEW OTP] Code for ${email}: ${otp}`);
+    console.log(`========================================\n`);
+
+    const mailer = getTransporter();
+    await mailer.sendMail({
+      from: process.env.EMAIL_FROM || '"PDF Platform" <pdfplatform382@gmail.com>',
       to: email,
-      subject: "Verify your email",
+      subject: "Verify your email - PDF Platform",
       text: `Your verification code is: ${otp}`,
       html: `<b>Your verification code is: ${otp}</b>`,
     });
-
-    if (info.messageId && nodemailer.getTestMessageUrl(info)) {
-      console.log("Preview URL: %s", nodemailer.getTestMessageUrl(info));
-    }
 
     res.status(201).json({ message: "OTP sent to your email", userId: user.id });
   } catch (error) {
@@ -160,7 +149,15 @@ export const verifyOTP = async (req: Request, res: Response): Promise<void> => {
     }
 
     if (user.isVerified) {
-      res.status(400).json({ error: "User is already verified" });
+      // User is already verified, log them in directly
+      const token = generateToken(user.id);
+      res.cookie("token", token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+      });
+      res.status(200).json({ user: { id: user.id, name: user.name, email: user.email } });
       return;
     }
 
@@ -284,9 +281,8 @@ export const mockOAuthLogin = async (req: Request, res: Response): Promise<void>
         data: {
           name: `Mock ${provider} User`,
           email,
+          password: "",
           isVerified: true,
-          provider,
-          providerId: `mock-${provider.toLowerCase()}-id`,
         },
       });
     }

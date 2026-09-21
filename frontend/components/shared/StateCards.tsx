@@ -1,3 +1,5 @@
+"use client";
+
 import { CheckCircle2, Download, RefreshCw, FileWarning } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -18,7 +20,27 @@ export function ProgressState({ fileName, action = "Processing" }: { fileName: s
   );
 }
 
-export function ResultCard({ fileName, savedBytes, actionDone = "Task Complete!" }: { fileName: string, savedBytes?: string, actionDone?: string }) {
+interface ResultCardProps {
+  fileName: string;
+  savedBytes?: string;
+  actionDone?: string;
+  onDownload?: () => void;
+  onStartOver?: () => void;
+  isDownloading?: boolean;
+  downloadError?: string | null;
+  downloadUrl?: string | null;
+}
+
+export function ResultCard({ 
+  fileName, 
+  savedBytes, 
+  actionDone = "Task Complete!",
+  onDownload,
+  onStartOver,
+  isDownloading = false,
+  downloadError = null,
+  downloadUrl = null,
+}: ResultCardProps) {
   return (
     <div className="w-full max-w-3xl mx-auto rounded-3xl border border-gray-100 bg-white p-12 text-center shadow-sm">
       <div className="flex flex-col items-center justify-center space-y-6">
@@ -33,19 +55,73 @@ export function ResultCard({ fileName, savedBytes, actionDone = "Task Complete!"
           </p>
         </div>
         <div className="flex flex-col sm:flex-row gap-4 mt-6">
-          <Button className="bg-[#E5322D] hover:bg-[#CC2A26] h-14 rounded-xl px-10 gap-2 font-bold text-lg shadow-lg active:scale-95 transition-transform">
-            <Download className="w-5 h-5" strokeWidth={2.5} /> Download File
-          </Button>
-          <Button variant="outline" className="h-14 rounded-xl px-10 gap-2 font-bold text-lg text-[#4A4A55] border-gray-200 hover:bg-gray-50 hover:text-[#33333B] active:scale-95 transition-transform">
-            <RefreshCw className="w-5 h-5" strokeWidth={2.5} /> Start Over
-          </Button>
+          <button 
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onDownload?.();
+            }} 
+            disabled={isDownloading}
+            className="cursor-pointer inline-flex items-center justify-center bg-[#E5322D] hover:bg-[#CC2A26] text-white h-14 rounded-xl px-10 gap-2 font-bold text-lg shadow-lg active:scale-95 transition-all disabled:opacity-75 disabled:pointer-events-none"
+          >
+            {isDownloading ? (
+              <>
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <span>Downloading...</span>
+              </>
+            ) : (
+              <>
+                <Download className="w-5 h-5" strokeWidth={2.5} />
+                <span>Download File</span>
+              </>
+            )}
+          </button>
+          <button 
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onStartOver?.();
+            }}
+            className="cursor-pointer inline-flex items-center justify-center border border-gray-200 bg-white hover:bg-gray-50 hover:text-[#33333B] text-[#4A4A55] h-14 rounded-xl px-10 gap-2 font-bold text-lg active:scale-95 transition-all"
+          >
+            <RefreshCw className="w-5 h-5" strokeWidth={2.5} />
+            <span>Start Over</span>
+          </button>
         </div>
+        {downloadError && (
+          <div className="flex flex-col items-center gap-2 mt-2">
+            <p className="text-red-500 font-semibold text-sm">{downloadError}</p>
+            {downloadUrl && (
+              <a 
+                href={downloadUrl} 
+                target="_blank" 
+                rel="noreferrer" 
+                download
+                className="text-sm font-bold text-[#E5322D] underline hover:text-[#CC2A26]"
+              >
+                Click here for direct download link
+              </a>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-export function ErrorState({ message, onRetry }: { message: string, onRetry: () => void }) {
+export function ErrorState({ 
+  message, 
+  onRetry,
+  actionText,
+  onAction,
+}: { 
+  message: string; 
+  onRetry: () => void;
+  actionText?: string;
+  onAction?: () => void;
+}) {
   return (
     <div className="w-full max-w-3xl mx-auto rounded-3xl border border-red-100 bg-red-50/50 p-12 text-center shadow-sm">
       <div className="flex flex-col items-center justify-center space-y-6">
@@ -56,9 +132,16 @@ export function ErrorState({ message, onRetry }: { message: string, onRetry: () 
           <h3 className="text-2xl font-extrabold text-red-700">Something went wrong</h3>
           <p className="text-red-600/80 mt-2 text-lg max-w-lg font-medium">{message}</p>
         </div>
-        <Button onClick={onRetry} className="bg-red-600 hover:bg-red-700 h-12 rounded-xl px-10 mt-4 font-bold text-white shadow-md active:scale-95 transition-transform">
-          Try Again
-        </Button>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <Button onClick={onRetry} className="bg-red-600 hover:bg-red-700 h-12 rounded-xl px-10 mt-4 font-bold text-white shadow-md active:scale-95 transition-transform">
+            Try Again
+          </Button>
+          {actionText && onAction && (
+            <Button onClick={onAction} variant="outline" className="h-12 rounded-xl px-8 mt-4 font-bold text-[#33333B] border-gray-300 hover:bg-white shadow-sm active:scale-95 transition-transform">
+              {actionText}
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   );

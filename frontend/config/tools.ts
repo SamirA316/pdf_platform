@@ -20,7 +20,7 @@ export interface ToolMetadata {
   badge?: string;
   accept: string;
   maxSizeMB: number;
-  actionType: "compress" | "merge" | "protect" | "resize" | "chat" | "rotate" | "basic";
+  actionType: "compress" | "merge" | "protect" | "resize" | "chat" | "rotate" | "edit" | "basic";
   allowMultiple: boolean;
 }
 
@@ -31,7 +31,7 @@ export const tools: ToolMetadata[] = [
     description: "Combine PDFs in the order you want with the easiest PDF merger available.",
     category: "pdf", categories: ["Workflows", "Organize PDF"],
     icon: Combine, color: "text-red-500", bgColor: "bg-red-50",
-    accept: ".pdf", maxSizeMB: 15, actionType: "merge", allowMultiple: true,
+    accept: ".pdf", maxSizeMB: 100, actionType: "merge", allowMultiple: true,
   },
   {
     slug: "split-pdf",
@@ -39,7 +39,7 @@ export const tools: ToolMetadata[] = [
     description: "Separate one page or a whole set for easy conversion into independent PDF files.",
     category: "pdf", categories: ["Workflows", "Organize PDF"],
     icon: Scissors, color: "text-orange-500", bgColor: "bg-orange-50",
-    accept: ".pdf", maxSizeMB: 15, actionType: "basic", allowMultiple: false,
+    accept: ".pdf", maxSizeMB: 100, actionType: "basic", allowMultiple: false,
   },
   {
     slug: "compress-pdf",
@@ -47,7 +47,7 @@ export const tools: ToolMetadata[] = [
     description: "Reduce file size while optimizing for maximal PDF quality.",
     category: "pdf", categories: ["Optimize PDF", "Workflows"],
     icon: Shrink, color: "text-green-500", bgColor: "bg-green-50",
-    accept: ".pdf", maxSizeMB: 10, actionType: "compress", allowMultiple: false,
+    accept: ".pdf", maxSizeMB: 100, actionType: "compress", allowMultiple: false,
   },
   {
     slug: "pdf-to-word",
@@ -55,7 +55,7 @@ export const tools: ToolMetadata[] = [
     description: "Easily convert your PDF files into easy to edit DOC and DOCX documents.",
     category: "pdf", categories: ["Convert PDF"],
     icon: FileText, color: "text-blue-500", bgColor: "bg-blue-50",
-    accept: ".pdf", maxSizeMB: 10, actionType: "basic", allowMultiple: false,
+    accept: ".pdf", maxSizeMB: 100, actionType: "basic", allowMultiple: false,
   },
   {
     slug: "pdf-to-powerpoint",
@@ -63,7 +63,7 @@ export const tools: ToolMetadata[] = [
     description: "Turn your PDF files into easy to edit PPT and PPTX slideshows.",
     category: "pdf", categories: ["Convert PDF"],
     icon: Presentation, color: "text-orange-600", bgColor: "bg-orange-100",
-    accept: ".pdf", maxSizeMB: 10, actionType: "basic", allowMultiple: false,
+    accept: ".pdf", maxSizeMB: 100, actionType: "basic", allowMultiple: false,
   },
   {
     slug: "pdf-to-excel",
@@ -71,7 +71,7 @@ export const tools: ToolMetadata[] = [
     description: "Pull data straight from PDFs into Excel spreadsheets in a few short seconds.",
     category: "pdf", categories: ["Convert PDF"],
     icon: Table, color: "text-green-600", bgColor: "bg-green-100",
-    accept: ".pdf", maxSizeMB: 10, actionType: "basic", allowMultiple: false,
+    accept: ".pdf", maxSizeMB: 100, actionType: "basic", allowMultiple: false,
   },
   {
     slug: "word-to-pdf",
@@ -79,7 +79,7 @@ export const tools: ToolMetadata[] = [
     description: "Make DOC and DOCX files easy to read by converting them to PDF.",
     category: "pdf", categories: ["Convert PDF"],
     icon: FileText, color: "text-blue-600", bgColor: "bg-blue-100",
-    accept: ".doc,.docx", maxSizeMB: 10, actionType: "basic", allowMultiple: true,
+    accept: ".doc,.docx", maxSizeMB: 100, actionType: "basic", allowMultiple: true,
   },
   {
     slug: "powerpoint-to-pdf",
@@ -87,7 +87,7 @@ export const tools: ToolMetadata[] = [
     description: "Make PPT and PPTX slideshows easy to view by converting them to PDF.",
     category: "pdf", categories: ["Convert PDF"],
     icon: Presentation, color: "text-orange-500", bgColor: "bg-orange-50",
-    accept: ".ppt,.pptx", maxSizeMB: 10, actionType: "basic", allowMultiple: true,
+    accept: ".ppt,.pptx", maxSizeMB: 100, actionType: "basic", allowMultiple: true,
   },
   {
     slug: "excel-to-pdf",
@@ -95,7 +95,7 @@ export const tools: ToolMetadata[] = [
     description: "Make EXCEL spreadsheets easy to read by converting them to PDF.",
     category: "pdf", categories: ["Convert PDF"],
     icon: Table, color: "text-green-500", bgColor: "bg-green-50",
-    accept: ".xls,.xlsx", maxSizeMB: 10, actionType: "basic", allowMultiple: true,
+    accept: ".xls,.xlsx", maxSizeMB: 100, actionType: "basic", allowMultiple: true,
   },
   {
     slug: "edit-pdf",
@@ -103,7 +103,7 @@ export const tools: ToolMetadata[] = [
     description: "Add text, images, shapes or freehand annotations to a PDF document.",
     category: "pdf", categories: ["Edit PDF", "Workflows"],
     icon: Edit3, color: "text-purple-500", bgColor: "bg-purple-50",
-    accept: ".pdf", maxSizeMB: 10, actionType: "basic", allowMultiple: false,
+    accept: ".pdf", maxSizeMB: 100, actionType: "edit", allowMultiple: false,
   },
   {
     slug: "pdf-to-jpg",
@@ -111,7 +111,7 @@ export const tools: ToolMetadata[] = [
     description: "Convert each PDF page into a JPG or extract all images contained in a PDF.",
     category: "pdf", categories: ["Convert PDF"],
     icon: ImageIcon, color: "text-yellow-500", bgColor: "bg-yellow-50",
-    accept: ".pdf", maxSizeMB: 10, actionType: "basic", allowMultiple: false,
+    accept: ".pdf", maxSizeMB: 100, actionType: "basic", allowMultiple: false,
   },
   {
     slug: "jpg-to-pdf",
@@ -119,7 +119,7 @@ export const tools: ToolMetadata[] = [
     description: "Convert JPG images to PDF in seconds. Easily adjust orientation and margins.",
     category: "pdf", categories: ["Convert PDF"],
     icon: ImageIcon, color: "text-yellow-600", bgColor: "bg-yellow-100",
-    accept: ".jpg,.jpeg,.png", maxSizeMB: 10, actionType: "basic", allowMultiple: true,
+    accept: ".jpg,.jpeg,.png", maxSizeMB: 100, actionType: "basic", allowMultiple: true,
   },
   {
     slug: "sign-pdf",
@@ -127,7 +127,7 @@ export const tools: ToolMetadata[] = [
     description: "Sign yourself or request electronic signatures from others.",
     category: "pdf", categories: ["PDF Security", "Workflows"],
     icon: PenTool, color: "text-blue-500", bgColor: "bg-blue-50",
-    accept: ".pdf", maxSizeMB: 10, actionType: "basic", allowMultiple: false,
+    accept: ".pdf", maxSizeMB: 100, actionType: "edit", allowMultiple: false,
   },
   {
     slug: "watermark",
@@ -135,7 +135,7 @@ export const tools: ToolMetadata[] = [
     description: "Stamp an image or text over your PDF in seconds.",
     category: "pdf", categories: ["Edit PDF"],
     icon: Stamp, color: "text-red-500", bgColor: "bg-red-50",
-    accept: ".pdf", maxSizeMB: 10, actionType: "basic", allowMultiple: false,
+    accept: ".pdf", maxSizeMB: 100, actionType: "basic", allowMultiple: false,
   },
   {
     slug: "rotate-pdf",
@@ -143,7 +143,7 @@ export const tools: ToolMetadata[] = [
     description: "Rotate your PDFs the way you need them.",
     category: "pdf", categories: ["Organize PDF"],
     icon: RotateCw, color: "text-purple-600", bgColor: "bg-purple-100",
-    accept: ".pdf", maxSizeMB: 10, actionType: "rotate", allowMultiple: false,
+    accept: ".pdf", maxSizeMB: 100, actionType: "rotate", allowMultiple: false,
   },
   {
     slug: "html-to-pdf",
@@ -151,7 +151,7 @@ export const tools: ToolMetadata[] = [
     description: "Convert webpages in HTML to PDF.",
     category: "pdf", categories: ["Convert PDF"],
     icon: Code, color: "text-yellow-500", bgColor: "bg-yellow-50",
-    accept: ".html", maxSizeMB: 5, actionType: "basic", allowMultiple: false,
+    accept: ".html,.htm", maxSizeMB: 100, actionType: "basic", allowMultiple: false,
   },
   {
     slug: "unlock-pdf",
@@ -159,7 +159,7 @@ export const tools: ToolMetadata[] = [
     description: "Remove PDF password security.",
     category: "pdf", categories: ["PDF Security"],
     icon: Unlock, color: "text-blue-600", bgColor: "bg-blue-100",
-    accept: ".pdf", maxSizeMB: 10, actionType: "protect", allowMultiple: false,
+    accept: ".pdf", maxSizeMB: 100, actionType: "protect", allowMultiple: false,
   },
   {
     slug: "protect-pdf",
@@ -167,7 +167,7 @@ export const tools: ToolMetadata[] = [
     description: "Protect PDF files with a password.",
     category: "pdf", categories: ["PDF Security"],
     icon: Shield, color: "text-blue-500", bgColor: "bg-blue-50",
-    accept: ".pdf", maxSizeMB: 10, actionType: "protect", allowMultiple: false,
+    accept: ".pdf", maxSizeMB: 100, actionType: "protect", allowMultiple: false,
   },
   {
     slug: "organize-pdf",
@@ -175,7 +175,7 @@ export const tools: ToolMetadata[] = [
     description: "Sort pages of your PDF file however you like.",
     category: "pdf", categories: ["Organize PDF"],
     icon: LayoutGrid, color: "text-orange-500", bgColor: "bg-orange-50",
-    accept: ".pdf", maxSizeMB: 10, actionType: "basic", allowMultiple: false,
+    accept: ".pdf", maxSizeMB: 100, actionType: "basic", allowMultiple: false,
   },
   {
     slug: "pdf-to-pdfa",
@@ -183,7 +183,7 @@ export const tools: ToolMetadata[] = [
     description: "Transform your PDF to PDF/A for long-term archiving.",
     category: "pdf", categories: ["Convert PDF", "Optimize PDF"],
     icon: FileBadge, color: "text-blue-500", bgColor: "bg-blue-50",
-    accept: ".pdf", maxSizeMB: 10, actionType: "basic", allowMultiple: false,
+    accept: ".pdf", maxSizeMB: 100, actionType: "basic", allowMultiple: false,
   },
   {
     slug: "repair-pdf",
@@ -191,7 +191,7 @@ export const tools: ToolMetadata[] = [
     description: "Repair a damaged PDF and recover data.",
     category: "pdf", categories: ["Optimize PDF"],
     icon: Wrench, color: "text-green-600", bgColor: "bg-green-100",
-    accept: ".pdf", maxSizeMB: 10, actionType: "basic", allowMultiple: false,
+    accept: ".pdf", maxSizeMB: 100, actionType: "basic", allowMultiple: false,
   },
   {
     slug: "page-numbers",
@@ -199,7 +199,7 @@ export const tools: ToolMetadata[] = [
     description: "Add page numbers into PDFs with ease.",
     category: "pdf", categories: ["Edit PDF", "Organize PDF"],
     icon: ListOrdered, color: "text-purple-600", bgColor: "bg-purple-100",
-    accept: ".pdf", maxSizeMB: 10, actionType: "basic", allowMultiple: false,
+    accept: ".pdf", maxSizeMB: 100, actionType: "basic", allowMultiple: false,
   },
   {
     slug: "scan-to-pdf",
@@ -207,7 +207,7 @@ export const tools: ToolMetadata[] = [
     description: "Capture document scans from your mobile device and send them instantly to your browser.",
     category: "pdf", categories: ["Convert PDF"],
     icon: Scan, color: "text-orange-600", bgColor: "bg-orange-100",
-    accept: ".jpg,.jpeg,.png", maxSizeMB: 10, actionType: "basic", allowMultiple: true,
+    accept: ".jpg,.jpeg,.png", maxSizeMB: 100, actionType: "basic", allowMultiple: true,
   },
   {
     slug: "ocr-pdf",
@@ -215,7 +215,7 @@ export const tools: ToolMetadata[] = [
     description: "Easily convert scanned PDF into searchable and selectable documents.",
     category: "pdf", categories: ["Convert PDF", "PDF Intelligence"],
     icon: ScanText, color: "text-green-500", bgColor: "bg-green-50",
-    accept: ".pdf", maxSizeMB: 10, actionType: "basic", allowMultiple: false,
+    accept: ".pdf", maxSizeMB: 100, actionType: "basic", allowMultiple: false,
   },
   {
     slug: "compare-pdf",
@@ -223,7 +223,7 @@ export const tools: ToolMetadata[] = [
     description: "Show a side-by-side document comparison.",
     category: "pdf", categories: ["Edit PDF"],
     icon: Columns, color: "text-blue-600", bgColor: "bg-blue-100",
-    accept: ".pdf", maxSizeMB: 10, actionType: "basic", allowMultiple: true,
+    accept: ".pdf", maxSizeMB: 100, actionType: "basic", allowMultiple: true,
   },
   {
     slug: "redact-pdf",
@@ -231,7 +231,7 @@ export const tools: ToolMetadata[] = [
     description: "Redact text and graphics to permanently remove sensitive information from a PDF.",
     category: "pdf", categories: ["PDF Security", "Edit PDF"],
     icon: Eraser, color: "text-blue-500", bgColor: "bg-blue-50",
-    accept: ".pdf", maxSizeMB: 10, actionType: "basic", allowMultiple: false,
+    accept: ".pdf", maxSizeMB: 100, actionType: "basic", allowMultiple: false,
   },
   {
     slug: "crop-pdf",
@@ -239,7 +239,7 @@ export const tools: ToolMetadata[] = [
     description: "Crop margins of PDF documents or select specific areas.",
     category: "pdf", categories: ["Edit PDF", "Organize PDF"],
     icon: Crop, color: "text-purple-500", bgColor: "bg-purple-50",
-    accept: ".pdf", maxSizeMB: 10, actionType: "basic", allowMultiple: false,
+    accept: ".pdf", maxSizeMB: 100, actionType: "basic", allowMultiple: false,
   },
   {
     slug: "pdf-forms",
@@ -247,7 +247,7 @@ export const tools: ToolMetadata[] = [
     description: "Create interactive fillable PDFs, or fill PDF forms yourself.",
     category: "pdf", categories: ["Edit PDF"],
     icon: FormInput, color: "text-purple-600", bgColor: "bg-purple-100", badge: "New!",
-    accept: ".pdf", maxSizeMB: 10, actionType: "basic", allowMultiple: false,
+    accept: ".pdf", maxSizeMB: 100, actionType: "basic", allowMultiple: false,
   },
   
   {
@@ -256,7 +256,7 @@ export const tools: ToolMetadata[] = [
     description: "Quickly generate concise summaries from articles, paragraphs, and essays.",
     category: "ai", categories: ["PDF Intelligence"],
     icon: Wand2, color: "text-purple-500", bgColor: "bg-purple-50", badge: "New!",
-    accept: ".pdf,.txt,.docx", maxSizeMB: 10, actionType: "basic", allowMultiple: false,
+    accept: ".pdf,.txt,.docx", maxSizeMB: 100, actionType: "basic", allowMultiple: false,
   },
   {
     slug: "translate-pdf",
@@ -264,7 +264,7 @@ export const tools: ToolMetadata[] = [
     description: "Easily translate PDF files powered by AI.",
     category: "ai", categories: ["PDF Intelligence"],
     icon: Languages, color: "text-purple-600", bgColor: "bg-purple-100", badge: "New!",
-    accept: ".pdf", maxSizeMB: 10, actionType: "basic", allowMultiple: false,
+    accept: ".pdf", maxSizeMB: 100, actionType: "basic", allowMultiple: false,
   },
   {
     slug: "pdf-to-markdown",
@@ -272,7 +272,7 @@ export const tools: ToolMetadata[] = [
     description: "Easily turn PDFs into Markdown files.",
     category: "ai", categories: ["Convert PDF", "PDF Intelligence"],
     icon: Braces, color: "text-purple-500", bgColor: "bg-purple-50", badge: "New!",
-    accept: ".pdf", maxSizeMB: 10, actionType: "basic", allowMultiple: false,
+    accept: ".pdf", maxSizeMB: 100, actionType: "basic", allowMultiple: false,
   },
   {
     slug: "resize-pdf",
@@ -280,7 +280,7 @@ export const tools: ToolMetadata[] = [
     description: "Change the size and dimensions of your PDF pages.",
     category: "pdf", categories: ["Edit PDF", "Organize PDF"],
     icon: Maximize, color: "text-blue-500", bgColor: "bg-blue-50", badge: "New!",
-    accept: ".pdf", maxSizeMB: 10, actionType: "resize", allowMultiple: false,
+    accept: ".pdf", maxSizeMB: 100, actionType: "resize", allowMultiple: false,
   },
   {
     slug: "pdf-to-png",
@@ -288,7 +288,7 @@ export const tools: ToolMetadata[] = [
     description: "Convert PDF pages to PNG images or extract images.",
     category: "pdf", categories: ["Convert PDF"],
     icon: FileImage, color: "text-green-500", bgColor: "bg-green-50", badge: "New!",
-    accept: ".pdf", maxSizeMB: 10, actionType: "basic", allowMultiple: false,
+    accept: ".pdf", maxSizeMB: 100, actionType: "basic", allowMultiple: false,
   },
   {
     slug: "chat-with-pdf",
@@ -296,7 +296,7 @@ export const tools: ToolMetadata[] = [
     description: "Upload your PDF and ask questions using AI to extract key insights.",
     category: "ai", categories: ["PDF Intelligence"],
     icon: MessageSquare, color: "text-purple-600", bgColor: "bg-purple-100", badge: "New!",
-    accept: ".pdf", maxSizeMB: 10, actionType: "chat", allowMultiple: false,
+    accept: ".pdf", maxSizeMB: 100, actionType: "chat", allowMultiple: false,
   },
 
 ];

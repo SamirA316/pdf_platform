@@ -20,7 +20,7 @@ interface UploadDropzoneProps {
 export function UploadDropzone({ 
   onUpload, 
   accept = ".pdf",
-  maxSizeMB = 10,
+  maxSizeMB = 100,
   allowMultiple = false
 }: UploadDropzoneProps) {
   const [isDragging, setIsDragging] = useState(false);
