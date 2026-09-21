@@ -10,7 +10,6 @@ import {
   pageNumbersPDF,
   imageToPDF,
   resizePDF,
-  dummyProcessor,
   protectPDF,
   unlockPDF,
   compressPDF,
@@ -31,7 +30,7 @@ import {
 
 const router = express.Router();
 
-router.post("/ocr-crop", ocrCrop);
+router.post("/ocr-crop", requireAuth, flexibleUpload, ocrCrop);
 
 router.post("/merge", requireAuth, flexibleUpload, mergePDFs);
 router.post("/split", requireAuth, flexibleUpload, splitPDF);
@@ -40,6 +39,7 @@ router.post("/organize", requireAuth, flexibleUpload, organizePDF);
 router.post("/watermark", requireAuth, flexibleUpload, watermarkPDF);
 router.post("/page-numbers", requireAuth, flexibleUpload, pageNumbersPDF);
 router.post("/image-to-pdf", requireAuth, flexibleUpload, imageToPDF);
+router.post("/jpg-to-pdf", requireAuth, flexibleUpload, imageToPDF);
 router.post("/resize", requireAuth, flexibleUpload, resizePDF);
 
 // Phase 1 & 2 endpoints
@@ -65,7 +65,12 @@ router.post("/ocr", requireAuth, flexibleUpload, ocrPdf);
 router.post("/export/:slug", requireAuth, flexibleUpload, pdfToOffice);
 router.post("/ui/:slug", requireAuth, flexibleUpload, advancedUiProcessor);
 
-// Catch-all route for any unrecognized tool
-router.post("/:slug", requireAuth, flexibleUpload, dummyProcessor);
+// Catch-all route for any unrecognized tool returns 404 TOOL_NOT_FOUND
+router.post("/:slug", (req, res) => {
+  res.status(404).json({
+    error: "TOOL_NOT_FOUND",
+    message: `Tool endpoint '/api/pdf/${req.params.slug}' not found or unsupported.`,
+  });
+});
 
 export default router;

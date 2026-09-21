@@ -27,7 +27,7 @@ export default function PricingPage() {
                 <li className="flex items-center"><CheckCircle2 className="w-4 h-4 mr-2 text-primary" /> Basic PDF tools</li>
                 <li className="flex items-center"><CheckCircle2 className="w-4 h-4 mr-2 text-primary" /> Basic Image tools</li>
                 <li className="flex items-center"><CheckCircle2 className="w-4 h-4 mr-2 text-primary" /> Limited daily usage (5 files)</li>
-                <li className="flex items-center"><CheckCircle2 className="w-4 h-4 mr-2 text-primary" /> Max file size: 10MB</li>
+                <li className="flex items-center"><CheckCircle2 className="w-4 h-4 mr-2 text-primary" /> Max file size: 100MB</li>
                 <li className="flex items-center"><CheckCircle2 className="w-4 h-4 mr-2 text-primary" /> Standard processing speed</li>
               </ul>
               <Link href="/signup">
@@ -44,7 +44,7 @@ export default function PricingPage() {
                 <li className="flex items-center"><CheckCircle2 className="w-4 h-4 mr-2 text-primary" /> Everything in Free</li>
                 <li className="flex items-center"><CheckCircle2 className="w-4 h-4 mr-2 text-primary" /> Unlimited daily usage</li>
                 <li className="flex items-center"><CheckCircle2 className="w-4 h-4 mr-2 text-primary" /> Batch processing</li>
-                <li className="flex items-center"><CheckCircle2 className="w-4 h-4 mr-2 text-primary" /> Max file size: 50MB</li>
+                <li className="flex items-center"><CheckCircle2 className="w-4 h-4 mr-2 text-primary" /> Max file size: 100MB</li>
                 <li className="flex items-center"><CheckCircle2 className="w-4 h-4 mr-2 text-primary" /> Ad-free experience</li>
                 <li className="flex items-center"><CheckCircle2 className="w-4 h-4 mr-2 text-primary" /> Priority processing</li>
               </ul>

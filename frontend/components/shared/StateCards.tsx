@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, Download, RefreshCw, FileWarning } from "lucide-react";
+import { CheckCircle2, Download, RefreshCw, FileWarning, ImageIcon, FileDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export function ProgressState({ fileName, action = "Processing" }: { fileName: string, action?: string }) {
@@ -20,6 +20,13 @@ export function ProgressState({ fileName, action = "Processing" }: { fileName: s
   );
 }
 
+export interface ResultDocumentItem {
+  id: string;
+  originalName: string;
+  size?: number;
+  filename?: string;
+}
+
 interface ResultCardProps {
   fileName: string;
   savedBytes?: string;
@@ -29,6 +36,8 @@ interface ResultCardProps {
   isDownloading?: boolean;
   downloadError?: string | null;
   downloadUrl?: string | null;
+  resultDocuments?: ResultDocumentItem[] | null;
+  onDownloadSingle?: (docId: string, name: string) => void;
 }
 
 export function ResultCard({ 
@@ -40,9 +49,15 @@ export function ResultCard({
   isDownloading = false,
   downloadError = null,
   downloadUrl = null,
+  resultDocuments = null,
+  onDownloadSingle,
 }: ResultCardProps) {
+  const isMultipleFiles = resultDocuments && resultDocuments.length > 1;
+  const isPdfFiles = resultDocuments && resultDocuments.some(d => d.originalName.toLowerCase().endsWith(".pdf"));
+  const isSingleImage = fileName.endsWith(".jpg") || fileName.endsWith(".jpeg") || fileName.endsWith(".png");
+
   return (
-    <div className="w-full max-w-3xl mx-auto rounded-3xl border border-gray-100 bg-white p-12 text-center shadow-sm">
+    <div className="w-full max-w-3xl mx-auto rounded-3xl border border-gray-100 bg-white p-8 md:p-12 text-center shadow-sm">
       <div className="flex flex-col items-center justify-center space-y-6">
         <div className="w-24 h-24 bg-green-500 text-white rounded-full flex items-center justify-center mb-2 shadow-[0_10px_30px_rgba(34,197,94,0.3)] ring-8 ring-green-50">
           <CheckCircle2 className="w-12 h-12" strokeWidth={3} />
@@ -54,7 +69,57 @@ export function ResultCard({
             {savedBytes && <span className="font-semibold text-green-600 ml-1">You saved {savedBytes}!</span>}
           </p>
         </div>
-        <div className="flex flex-col sm:flex-row gap-4 mt-6">
+
+        {/* Multi-document / Multi-image direct downloads list */}
+        {isMultipleFiles && (
+          <div className="w-full max-w-xl bg-gray-50 border border-gray-200/80 rounded-2xl p-4 text-left">
+            <div className="flex items-center justify-between mb-3 px-1">
+              <span className="text-xs font-bold uppercase tracking-wider text-gray-500">
+                {isPdfFiles ? `Split PDF Files (${resultDocuments.length})` : `Converted Images (${resultDocuments.length})`}
+              </span>
+              <span className="text-xs text-green-600 font-semibold">
+                {isPdfFiles ? "Ready to Download" : "Direct JPG / PNG"}
+              </span>
+            </div>
+            <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+              {resultDocuments.map((doc, idx) => (
+                <div 
+                  key={doc.id || idx} 
+                  className="flex items-center justify-between p-3 bg-white rounded-xl border border-gray-100 hover:border-gray-200 transition-all shadow-xs"
+                >
+                  <div className="flex items-center gap-3 overflow-hidden">
+                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+                      isPdfFiles ? "bg-red-50 text-[#E5322D]" : "bg-yellow-50 text-yellow-600"
+                    }`}>
+                      {isPdfFiles ? <FileDown className="w-5 h-5" /> : <ImageIcon className="w-5 h-5" />}
+                    </div>
+                    <div className="truncate">
+                      <p className="text-sm font-semibold text-gray-800 truncate">{doc.originalName}</p>
+                      <p className="text-xs text-gray-400">
+                        {isPdfFiles ? `File #${idx + 1}` : `Page ${idx + 1}`}
+                        {doc.size ? ` • ${(doc.size / 1024).toFixed(1)} KB` : ""}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onDownloadSingle ? onDownloadSingle(doc.id, doc.originalName) : onDownload?.();
+                    }}
+                    className="cursor-pointer ml-3 shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-[#E5322D] hover:text-white hover:bg-[#E5322D] border border-[#E5322D]/30 rounded-lg transition-all"
+                  >
+                    <FileDown className="w-3.5 h-3.5" />
+                    <span>Download</span>
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="flex flex-col sm:flex-row gap-4 mt-4">
           <button 
             type="button"
             onClick={(e) => {
@@ -73,7 +138,13 @@ export function ResultCard({
             ) : (
               <>
                 <Download className="w-5 h-5" strokeWidth={2.5} />
-                <span>Download File</span>
+                <span>
+                  {isMultipleFiles 
+                    ? `Download All (${resultDocuments.length} ${isPdfFiles ? "Files" : "Images"})` 
+                    : isSingleImage 
+                      ? "Download Image" 
+                      : "Download File"}
+                </span>
               </>
             )}
           </button>

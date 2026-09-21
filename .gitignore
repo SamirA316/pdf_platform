@@ -1,0 +1,13 @@
+node_modules/
+.next/
+dist/
+*.log
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+.DS_Store
+uploads/
+backend/uploads/
+.env
+backend/.env

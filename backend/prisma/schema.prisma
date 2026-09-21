@@ -8,16 +8,18 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(uuid())
-  name      String
-  email     String   @unique
-  password  String
-  isVerified Boolean @default(false)
-  otp       String?
+  id         String     @id @default(uuid())
+  name       String
+  email      String     @unique
+  password   String
+  isVerified Boolean    @default(false)
+  otp        String?
   otpExpires DateTime?
-  documents Document[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  documents  Document[]
+  files      File[]
+  jobs       Job[]
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
 }
 
 model Document {
@@ -31,4 +33,57 @@ model Document {
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+}
+
+model File {
+  id           String   @id @default(cuid())
+  userId       String
+  jobId        String?  // Creator Job ID for job-generated files
+
+  originalName String
+  storageKey   String   // Relative path: users/{userId}/{random}.pdf
+  mimeType     String
+  size         Int
+
+  status       String   @default("READY") // Validated via FileStatus enum in application layer (SQLite connector does not support native enums)
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceJob    Job?     @relation("JobProducedFiles", fields: [jobId], references: [id], onDelete: Cascade)
+  jobsAsOutput Job[]    @relation("JobOutputFile")
+
+  @@index([userId])
+  @@index([jobId])
+}
+
+model Job {
+  id           String    @id @default(cuid())
+  userId       String
+
+  tool         String    // e.g. "compress-pdf"
+  status       String    @default("QUEUED") // QUEUED | PROCESSING | COMPLETED | FAILED | CANCELLED | EXPIRED
+  progress     Int       @default(0)
+
+  inputFileIds String    // JSON array of input File IDs: e.g. '["file_123"]'
+  outputFileId String?   // Retained single output reference for backwards compatibility
+  options      String?   // JSON string of tool options: e.g. '{"level":"recommended"}'
+
+  errorCode    String?   // Machine readable error code (e.g. PROCESSING_FAILED)
+  errorMessage String?   // Sanitized user facing message
+
+  startedAt    DateTime?
+  completedAt  DateTime?
+  expiresAt    DateTime?
+
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  outputFile   File?     @relation("JobOutputFile", fields: [outputFileId], references: [id], onDelete: SetNull)
+  outputFiles  File[]    @relation("JobProducedFiles")
+
+  @@index([userId])
+  @@index([status])
 }

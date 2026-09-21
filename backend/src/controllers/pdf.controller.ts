@@ -13,58 +13,10 @@ import { compressPDFFile } from "../utils/pdfCompressor";
 
 const pdfParse = require("pdf-parse");
 const execPromise = util.promisify(exec);
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "dummy-key-to-allow-startup" });
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" });
 const prisma = new PrismaClient();
 const uploadDir = path.join(process.cwd(), "uploads");
 
-
-export const dummyProcessor = async (req: AuthRequest, res: Response): Promise<void> => {
-  try {
-    const userId = req.userId as string;
-    // req.files or req.file could be populated based on uploadMiddleware.any()
-    const files = req.files as Express.Multer.File[];
-    const file = req.file;
-
-    // Use the first available file as the "result" to mock processing
-    const targetFile = file || (files && files.length > 0 ? files[0] : null);
-
-    if (!targetFile) {
-      res.status(400).json({ error: "No file provided for dummy processing" });
-      return;
-    }
-
-    // Instead of doing actual heavy processing, we just save the original file 
-    // as a new document to simulate a processed result.
-    const newPdfBytes = fs.readFileSync(targetFile.path);
-    
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    const slug = req.params.slug || "dummy";
-    const newFilename = `${slug}-${uniqueSuffix}.pdf`;
-    const newPath = path.join(uploadDir, newFilename);
-
-    fs.writeFileSync(newPath, newPdfBytes);
-
-    const document = await prisma.document.create({
-      data: {
-        filename: newFilename,
-        originalName: `processed-${targetFile.originalname}`,
-        size: Buffer.byteLength(newPdfBytes),
-        type: (slug as string).toUpperCase().replace("-", "_").substring(0, 20),
-        path: newPath,
-        userId: userId,
-      },
-    });
-
-    // Clean up original uploaded file(s)
-    if (file) fs.unlinkSync(file.path);
-    if (files) files.forEach(f => { if (fs.existsSync(f.path)) fs.unlinkSync(f.path) });
-
-    res.status(201).json({ message: `${slug} processed successfully (Dummy)`, document });
-  } catch (error) {
-    console.error("Dummy processor error:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-};
 
 export const protectPDF = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -557,6 +509,9 @@ export const pdfToImage = async (req: AuthRequest, res: Response): Promise<void>
       return pdf.numPages;
     }, pdfBase64);
 
+    const originalBase = path.parse(file.originalname).name;
+    const createdDocuments = [];
+
     const canvasHandle = await page.$("#render-canvas");
     for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
       await page.evaluate(async (num) => {
@@ -571,43 +526,48 @@ export const pdfToImage = async (req: AuthRequest, res: Response): Promise<void>
         await p.render({ canvasContext: ctx, viewport }).promise;
       }, pageNum);
 
-      const imgFileName = `page-${String(pageNum).padStart(3, "0")}.${ext}`;
-      const imgPath = path.join(outDir, imgFileName);
-
       if (canvasHandle) {
         const screenshotOpts = isPng
           ? ({ type: "png" as const })
           : ({ type: "jpeg" as const, quality: 92 });
         const buffer = await canvasHandle.screenshot(screenshotOpts);
-        fs.writeFileSync(imgPath, buffer);
+
+        const pageImgFilename = totalPages === 1
+          ? `image-${uniqueSuffix}.${ext}`
+          : `image-${uniqueSuffix}-page-${pageNum}.${ext}`;
+        const pageImgPath = path.join(uploadDir, pageImgFilename);
+        fs.writeFileSync(pageImgPath, buffer);
+
+        const pageOriginalName = totalPages === 1
+          ? `${originalBase}.${ext}`
+          : `${originalBase}-page-${pageNum}.${ext}`;
+
+        const doc = await prisma.document.create({
+          data: {
+            filename: pageImgFilename,
+            originalName: pageOriginalName,
+            size: fs.statSync(pageImgPath).size,
+            type: `IMAGE_${ext.toUpperCase()}`,
+            path: pageImgPath,
+            userId: userId,
+          },
+        });
+        createdDocuments.push(doc);
       }
     }
 
     await browser.close();
     browser = undefined;
 
-    const zipFilename = `images-${uniqueSuffix}.zip`;
-    const zipPath = path.join(uploadDir, zipFilename);
-    await execPromise(`zip -j "${zipPath}" "${outDir}"/*`);
-
-    const originalBase = path.parse(file.originalname).name;
-    const document = await prisma.document.create({
-      data: {
-        filename: zipFilename,
-        originalName: `${originalBase}-images.zip`,
-        size: fs.statSync(zipPath).size,
-        type: "PDF_TO_IMAGE",
-        path: zipPath,
-        userId: userId,
-      },
-    });
-
-    fs.rmSync(outDir, { recursive: true, force: true });
+    if (fs.existsSync(outDir)) {
+      fs.rmSync(outDir, { recursive: true, force: true });
+    }
     if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
 
     res.status(201).json({
-      message: `PDF converted to ${totalPages} image${totalPages > 1 ? "s" : ""} successfully`,
-      document,
+      message: `PDF converted to ${totalPages} ${ext.toUpperCase()} image${totalPages > 1 ? "s" : ""} successfully`,
+      document: createdDocuments[0],
+      documents: createdDocuments,
       totalPages,
     });
   } catch (error) {
@@ -894,7 +854,7 @@ export function sanitizeOcrText(raw: string): string {
 
 export const ocrCrop = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { image } = req.body;
+    const { image } = req.body || {};
     if (!image) {
       res.status(400).json({ error: "No image provided" });
       return;

@@ -8,8 +8,8 @@ import util from "util";
 const execPromise = util.promisify(exec);
 
 export interface CompressOptions {
-  level?: "extreme" | "recommended" | "less" | "custom" | string;
-  customSize?: string;
+  level?: "extreme" | "recommended" | "less" | "custom" | string | undefined;
+  customSize?: string | undefined;
 }
 
 export interface CompressResult {

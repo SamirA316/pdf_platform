@@ -1,7 +1,7 @@
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
 interface FetchOptions extends RequestInit {
-  data?: any;
+  data?: unknown;
 }
 
 export async function apiClient<T = any>(
@@ -38,16 +38,20 @@ export async function apiClient<T = any>(
     const response = await fetch(url, config);
     
     // Attempt to parse JSON response
-    let responseData;
+    let responseData: Record<string, unknown> | string | undefined;
     const contentType = response.headers.get("content-type");
     if (contentType && contentType.includes("application/json")) {
-      responseData = await response.json();
+      responseData = (await response.json()) as Record<string, unknown>;
     } else {
       responseData = await response.text();
     }
 
     if (!response.ok) {
-      let errorMessage = responseData?.error;
+      const errObj = typeof responseData === "object" && responseData !== null ? (responseData as Record<string, unknown>) : undefined;
+      const nestedErr = errObj?.error as Record<string, unknown> | string | undefined;
+      let errorMessage = typeof nestedErr === "object" && nestedErr !== null ? (nestedErr.message as string | undefined) : (nestedErr as string | undefined);
+      const errorCode = typeof nestedErr === "object" && nestedErr !== null ? (nestedErr.code as string | undefined) : undefined;
+
       if (!errorMessage && typeof responseData === "string") {
         const preMatch = responseData.match(/<pre[^>]*>([\s\S]*?)<\/pre>/i);
         if (preMatch && preMatch[1]) {
@@ -62,12 +66,41 @@ export async function apiClient<T = any>(
           errorMessage = responseData;
         }
       }
-      throw new Error(errorMessage || "API Error");
+
+      const err = new Error(errorMessage || "API Error") as Error & { code?: string };
+      if (errorCode) {
+        err.code = errorCode;
+      }
+      throw err;
     }
 
     return responseData as T;
-  } catch (error: any) {
+  } catch (error) {
     // Standardize error format
     throw error;
   }
+}
+
+export interface V1UploadedFile {
+  id: string;
+  originalName: string;
+  mimeType: string;
+  size: number;
+  status: string;
+}
+
+/**
+ * Phase 2: Uploads a PDF file directly to POST /api/v1/files
+ */
+export async function uploadFileToV1(file: File): Promise<V1UploadedFile> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const endpoint = file.type.startsWith("image/") ? "/api/v1/files?type=image" : "/api/v1/files";
+  const res = await apiClient<{ success: boolean; data: { file: V1UploadedFile } }>(
+    endpoint,
+    { data: formData }
+  );
+
+  return res.data.file;
 }

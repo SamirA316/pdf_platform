@@ -6,7 +6,19 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "start": "tsx src/server.ts",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "tsx tests/phase2_files.test.ts",
+    "test:files": "tsx tests/phase2_files.test.ts",
+    "test:jobs": "tsx tests/phase3_jobs.test.ts",
+    "test:merge": "tsx tests/phase4_merge.test.ts",
+    "test:split": "tsx tests/phase4_split.test.ts",
+    "test:rotate": "tsx tests/phase4_rotate.test.ts",
+    "test:organize": "tsx tests/phase4_organize.test.ts",
+    "test:resize": "tsx tests/phase4_resize.test.ts",
+    "test:watermark": "tsx tests/phase4_watermark.test.ts",
+    "test:page-numbers": "tsx tests/phase4_page_numbers.test.ts",
+    "test:protect": "tsx tests/phase4_protect_unlock.test.ts",
+    "test:repair": "tsx tests/phase4_repair.test.ts",
+    "test:pdfa": "tsx tests/phase4_pdfa.test.ts"
   },
   "keywords": [],
   "author": "",
