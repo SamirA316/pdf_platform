@@ -9,6 +9,7 @@ import { rotateProcessor } from "../pdf/processors/rotate.processor";
 import { organizeProcessor } from "../pdf/processors/organize.processor";
 import { resizeProcessor } from "../pdf/processors/resize.processor";
 import { watermarkProcessor } from "../pdf/processors/watermark.processor";
+import { pageNumbersProcessor } from "../pdf/processors/page-numbers.processor";
 import { filesService } from "../files/files.service";
 import {
   JobNotFoundError,
@@ -209,6 +210,16 @@ export class JobService {
         resultOutputFileId = result.outputFileId;
         resultMetrics = result.metrics;
         generatedOutputFileIds.push(result.outputFileId);
+      } else if (tool === "page-numbers") {
+        const result = await pageNumbersProcessor.process({
+          jobId,
+          userId,
+          inputFileId: inputFileIds[0]!,
+          options,
+        });
+        resultOutputFileId = result.outputFileId;
+        resultMetrics = result.metrics;
+        generatedOutputFileIds.push(result.outputFileId);
       } else {
         throw new Error(`No processor registered for tool '${tool}'.`);
       }
@@ -271,6 +282,8 @@ export class JobService {
           ? "We couldn't resize this PDF. Please try again."
           : tool === "watermark-pdf"
           ? "We couldn't watermark this PDF. Please try again."
+          : tool === "page-numbers"
+          ? "We couldn't add page numbers to this PDF. Please try again."
           : "We couldn't process this PDF. Please try another file.";
 
       try {

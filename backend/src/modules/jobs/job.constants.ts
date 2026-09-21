@@ -23,6 +23,7 @@ export const ALLOWED_TOOLS = new Set<string>([
   "organize-pdf",
   "resize-pdf",
   "watermark-pdf",
+  "page-numbers",
 ]);
 
 /**
@@ -97,5 +98,17 @@ export const ALLOWED_WATERMARK_POSITIONS = new Set<string>([
   "top-right",
   "bottom-left",
   "bottom-right",
+]);
+
+/**
+ * Page Numbers PDF Allowed Positions
+ */
+export const ALLOWED_PAGE_NUMBER_POSITIONS = new Set<string>([
+  "bottom-center",
+  "bottom-left",
+  "bottom-right",
+  "top-center",
+  "top-left",
+  "top-right",
 ]);
 

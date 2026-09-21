@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Phase 4.7 - Page Numbers Tool] - 2026-09-22
+
+### Added
+- Integrated `page-numbers` tool into the V1 Job Processing System (`/api/v1/jobs`)
+- Added `"page-numbers"` to `ALLOWED_TOOLS` and defined `ALLOWED_PAGE_NUMBER_POSITIONS` in `job.constants.ts`
+- Validation logic for `page-numbers` in `job.validation.ts`:
+  - Exactly 1 input file required, user ownership verified, status `READY`
+  - Position validation across 6 locations: `bottom-center`, `bottom-left`, `bottom-right`, `top-center`, `top-left`, `top-right`
+  - Starting page number validation (`startNumber >= 1`)
+  - Target pages bounds validation against `totalPages` (`PAGE_OUT_OF_BOUNDS`)
+- Decoupled `PageNumbersProcessor` in `backend/src/modules/pdf/processors/page-numbers.processor.ts`:
+  - Uses `pdf-lib` to embed `StandardFonts.Helvetica` and dynamically calculate text positions based on page bounds and margin
+  - Supports template placeholders `{n}` (page index + offset) and `{total}` (total pages)
+  - Saves with `{ useObjectStreams: false }` for universal compatibility
+  - Automatic partial output file unlinking on processor failure
+- Frontend integration:
+  - Created `PageNumbersConfig.tsx` with visual position selector, format template presets, live preview pill, and cover page skipping
+  - Updated `ToolWorkspace.tsx` with `slug === "page-numbers"` dispatch and result download
+- Comprehensive test suite `backend/tests/phase4_page_numbers.test.ts` (`npm run test:page-numbers`) covering 14 scenarios (100% pass)
+- Complete documentation: `docs/04-api/page-numbers.md`, `docs/05-features/page-numbers.md`, `docs/08-testing/page-numbers.md`
+
 ## [Phase 4.6 - Watermark PDF Tool] - 2026-09-22
 
 ### Added

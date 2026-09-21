@@ -13,6 +13,7 @@ import {
   STANDARD_PAGE_DIMENSIONS,
   ALLOWED_WATERMARK_TYPES,
   ALLOWED_WATERMARK_POSITIONS,
+  ALLOWED_PAGE_NUMBER_POSITIONS,
   JobStatus,
 } from "./job.constants";
 import { ICreateJobDto } from "./job.types";
@@ -39,6 +40,9 @@ export async function validateCreateJob(userId: string, data: ICreateJobDto): Pr
   let normalizedTool = data.tool.trim().toLowerCase();
   if (normalizedTool === "watermark") {
     normalizedTool = "watermark-pdf";
+  }
+  if (normalizedTool === "add-page-numbers" || normalizedTool === "pagenumbers") {
+    normalizedTool = "page-numbers";
   }
   if (!ALLOWED_TOOLS.has(normalizedTool)) {
     throw new InvalidToolError(
@@ -672,6 +676,99 @@ export async function validateCreateJob(userId: string, data: ICreateJobDto): Pr
       }
       options.scale = scale;
       options.imageFileId = imageFileId;
+    }
+  }
+
+  // 4H. Page Numbers Options & Validation
+  if (normalizedTool === "page-numbers") {
+    if (fileIds.length !== 1) {
+      throw new InvalidInputFileError("Tool 'page-numbers' accepts exactly 1 input PDF file.");
+    }
+
+    const file = files[0]!;
+    const uploadBase = path.resolve(process.cwd(), "uploads");
+    const physicalPath = path.resolve(uploadBase, file.storageKey);
+
+    if (!fs.existsSync(physicalPath)) {
+      throw new InvalidInputFileError("Physical input PDF does not exist on disk.");
+    }
+
+    let totalPages = 0;
+    try {
+      const pdfBytes = await fs.promises.readFile(physicalPath);
+      const pdfDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
+      totalPages = pdfDoc.getPageCount();
+    } catch {
+      throw new BadRequestError("Unable to read input PDF document.", "INVALID_PDF");
+    }
+
+    if (totalPages < 1) {
+      throw new BadRequestError("The PDF document contains no pages.", "INVALID_PDF_PAGES");
+    }
+
+    // Validate position
+    let position = (options.position || "bottom-center").toString().trim().toLowerCase();
+    if (!ALLOWED_PAGE_NUMBER_POSITIONS.has(position)) {
+      throw new BadRequestError(
+        `Invalid page numbers position '${options.position}'. Allowed: ${Array.from(ALLOWED_PAGE_NUMBER_POSITIONS).join(", ")}`,
+        "INVALID_TOOL_OPTIONS"
+      );
+    }
+    options.position = position;
+
+    // Validate startNumber
+    let startNumber = options.startNumber !== undefined ? Number(options.startNumber) : 1;
+    if (!Number.isInteger(startNumber) || startNumber < 1) {
+      throw new BadRequestError("Starting page number must be an integer >= 1.", "INVALID_START_NUMBER");
+    }
+    options.startNumber = startNumber;
+
+    // Validate fontSize
+    let fontSize = options.fontSize !== undefined ? Number(options.fontSize) : 12;
+    if (isNaN(fontSize) || fontSize < 6 || fontSize > 48) {
+      throw new BadRequestError("Font size must be a number between 6 and 48.", "INVALID_TOOL_OPTIONS");
+    }
+    options.fontSize = fontSize;
+
+    // Validate margin
+    let margin = options.margin !== undefined ? Number(options.margin) : 30;
+    if (isNaN(margin) || margin < 5 || margin > 150) {
+      throw new BadRequestError("Margin must be a number between 5 and 150 pt.", "INVALID_TOOL_OPTIONS");
+    }
+    options.margin = margin;
+
+    // Validate format string
+    let format = typeof options.format === "string" && options.format.trim() ? options.format.trim() : "Page {n} / {total}";
+    if (format.length > 50) {
+      throw new BadRequestError("Format template string cannot exceed 50 characters.", "INVALID_TOOL_OPTIONS");
+    }
+    options.format = format;
+
+    // Validate color
+    options.color = typeof options.color === "string" && options.color.trim() ? options.color.trim() : "#000000";
+
+    // Validate pages specification
+    if (options.pages !== undefined && options.pages !== "all") {
+      if (!Array.isArray(options.pages) || options.pages.length === 0) {
+        throw new BadRequestError("Pages option must be 'all' or a non-empty array of page numbers.", "INVALID_TOOL_OPTIONS");
+      }
+      const pageList: number[] = [];
+      for (const p of options.pages) {
+        const pageNum = Number(p);
+        if (!Number.isInteger(pageNum)) {
+          throw new BadRequestError(`Page number '${p}' must be an integer.`, "INVALID_PAGE");
+        }
+        if (pageNum < 1 || pageNum > totalPages) {
+          throw new BadRequestError(
+            `Page ${pageNum} is out of bounds (document has ${totalPages} pages).`,
+            "PAGE_OUT_OF_BOUNDS"
+          );
+        }
+        pageList.push(pageNum);
+      }
+      options.pages = pageList;
+    } else {
+      options.pages = "all";
     }
   }
 
