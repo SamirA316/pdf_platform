@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Phase 4.5 - Resize PDF Tool] - 2026-09-22
+
+### Added
+- Integrated `resize-pdf` tool into the V1 Job Processing System (`/api/v1/jobs`)
+- Added `"resize-pdf"` to `ALLOWED_TOOLS` in `job.constants.ts`
+- Added standard presets and dimensions for `a3`, `a4`, `a5`, `letter`, `legal`, and `custom` sizes
+- Validation logic for `resize-pdf` in `job.validation.ts`:
+  - Exactly 1 input file required
+  - Strict ownership, `READY` status, and `application/pdf` MIME verification
+  - Page size validation (`ALLOWED_PAGE_SIZES`)
+  - Orientation validation (`portrait` vs `landscape`)
+  - Custom dimension validation with unit conversion (`mm`, `inch`, `pt`) and bounds enforcement (10 pt to 5000 pt)
+- Decoupled `ResizeProcessor` in `backend/src/modules/pdf/processors/resize.processor.ts`:
+  - Uses `pdf-lib` proportional content scaling (`scaleContent`), centering offset translation (`translateContent`), and media box adjustment (`setSize`)
+  - Ensures no content cropping while adjusting dimensions
+  - Saves with `{ useObjectStreams: false }` for universal compatibility
+  - Automatic partial output file unlinking on processor failure
+- Frontend integration:
+  - Rich `ResizeConfig.tsx` component with preset cards, visual portrait/landscape orientation toggles, and custom dimension inputs
+  - `ToolWorkspace.tsx` integrated with `slug === "resize-pdf"` dispatch and result download
+- Comprehensive test suite `backend/tests/phase4_resize.test.ts` (`npm run test:resize`) covering 16 scenarios (100% pass)
+- Complete documentation: `docs/04-api/resize-pdf.md`, `docs/05-features/resize-pdf.md`, `docs/08-testing/resize-pdf.md`
+
 ## [Phase 4.4 - Organize PDF Tool] - 2026-09-22
 
 ### Added

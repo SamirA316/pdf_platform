@@ -353,6 +353,57 @@ export function ToolWorkspace({ slug, accept, maxSizeMB, actionType, allowMultip
       }
     }
 
+    if (slug === "resize-pdf") {
+      try {
+        if (!files || files.length === 0) {
+          throw new Error("Please select a PDF file to resize.");
+        }
+
+        const v1File = await uploadFileToV1(files[0]!);
+
+        const job = await createJob({
+          tool: "resize-pdf",
+          inputFileIds: [v1File.id],
+          options: config ? (config as Record<string, any>) : { size: "a4", orientation: "portrait" },
+        });
+
+        // Poll job status until COMPLETED or FAILED
+        let active = true;
+        while (active) {
+          await new Promise((res) => setTimeout(res, 1000));
+          const updatedJob = await getJob(job.id);
+
+          if (updatedJob.status === "COMPLETED") {
+            active = false;
+            setIsV1JobResult(true);
+
+            if (updatedJob.outputFileId) {
+              setResultId(updatedJob.outputFileId);
+            }
+            if (updatedJob.outputFile?.originalName) {
+              setResultFileName(updatedJob.outputFile.originalName);
+            } else {
+              setResultFileName("resized-document.pdf");
+            }
+
+            setFlowState("result");
+            return;
+          } else if (updatedJob.status === "FAILED" || updatedJob.status === "CANCELLED") {
+            active = false;
+            throw new Error(updatedJob.errorMessage || "We couldn't resize this PDF. Please try again.");
+          }
+        }
+      } catch (err: any) {
+        console.error("Job processing error for resize-pdf:", err);
+        setProcessError({
+          message: err?.message || "We couldn't resize this PDF. Please try again.",
+          isAuth: false,
+        });
+        setFlowState("error");
+        return;
+      }
+    }
+
     // Phase 3 Proof-of-Concept: Route Compress PDF through Job System
     if (slug === "compress-pdf" && v1FileId) {
       try {

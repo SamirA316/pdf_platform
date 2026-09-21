@@ -2,7 +2,17 @@ import path from "path";
 import fs from "fs";
 import { PDFDocument } from "pdf-lib";
 import { prisma } from "../../common/prisma";
-import { ALLOWED_TOOLS, ALLOWED_COMPRESS_LEVELS, ALLOWED_SPLIT_MODES, ALLOWED_ROTATION_ANGLES, JobStatus } from "./job.constants";
+import {
+  ALLOWED_TOOLS,
+  ALLOWED_COMPRESS_LEVELS,
+  ALLOWED_SPLIT_MODES,
+  ALLOWED_ROTATION_ANGLES,
+  ALLOWED_PAGE_SIZES,
+  ALLOWED_RESIZE_UNITS,
+  ALLOWED_ORIENTATIONS,
+  STANDARD_PAGE_DIMENSIONS,
+  JobStatus,
+} from "./job.constants";
 import { ICreateJobDto } from "./job.types";
 import {
   InvalidToolError,
@@ -379,6 +389,145 @@ export async function validateCreateJob(userId: string, data: ICreateJobDto): Pr
     }
 
     options.pages = normalizedPages;
+  }
+
+  // 4F. Resize PDF Options & Validation
+  if (normalizedTool === "resize-pdf") {
+    if (fileIds.length !== 1) {
+      throw new InvalidInputFileError("Tool 'resize-pdf' accepts exactly 1 input file.");
+    }
+
+    const file = files[0]!;
+    const uploadBase = path.resolve(process.cwd(), "uploads");
+    const physicalPath = path.resolve(uploadBase, file.storageKey);
+
+    if (!fs.existsSync(physicalPath)) {
+      throw new InvalidInputFileError("Physical input PDF does not exist on disk.");
+    }
+
+    let totalPages = 0;
+    try {
+      const pdfBytes = await fs.promises.readFile(physicalPath);
+      const pdfDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
+      totalPages = pdfDoc.getPageCount();
+    } catch {
+      throw new BadRequestError("Unable to read input PDF document.", "INVALID_PDF");
+    }
+
+    if (totalPages < 1) {
+      throw new BadRequestError("The PDF document contains no pages.", "INVALID_PDF_PAGES");
+    }
+
+    // Validate size preset
+    if (!options.size || typeof options.size !== "string") {
+      throw new BadRequestError(
+        `Resize option 'size' is required. Allowed: ${Array.from(ALLOWED_PAGE_SIZES).join(", ")}`,
+        "INVALID_TOOL_OPTIONS"
+      );
+    }
+
+    const normalizedSize = options.size.trim().toLowerCase();
+    if (!ALLOWED_PAGE_SIZES.has(normalizedSize)) {
+      throw new BadRequestError(
+        `Invalid page size '${options.size}'. Allowed: ${Array.from(ALLOWED_PAGE_SIZES).join(", ")}`,
+        "INVALID_PAGE_SIZE"
+      );
+    }
+
+    // Validate orientation
+    let normalizedOrientation = "portrait";
+    if (options.orientation !== undefined) {
+      if (typeof options.orientation !== "string") {
+        throw new BadRequestError("Orientation must be a string ('portrait' or 'landscape').", "INVALID_TOOL_OPTIONS");
+      }
+      const rawOrientation = options.orientation.trim().toLowerCase();
+      if (!ALLOWED_ORIENTATIONS.has(rawOrientation)) {
+        throw new BadRequestError(
+          `Invalid orientation '${options.orientation}'. Allowed: portrait, landscape`,
+          "INVALID_ORIENTATION"
+        );
+      }
+      normalizedOrientation = rawOrientation;
+    }
+
+    let targetWidthPt = 0;
+    let targetHeightPt = 0;
+
+    if (normalizedSize === "custom") {
+      const width = Number(options.width);
+      const height = Number(options.height);
+
+      if (options.width === undefined || options.height === undefined || isNaN(width) || isNaN(height)) {
+        throw new BadRequestError(
+          "Custom page size requires positive numeric 'width' and 'height'.",
+          "INVALID_DIMENSIONS"
+        );
+      }
+
+      if (width <= 0 || height <= 0) {
+        throw new BadRequestError(
+          "Custom width and height must be positive numbers greater than 0.",
+          "INVALID_DIMENSIONS"
+        );
+      }
+
+      let unit = "mm";
+      if (options.unit !== undefined) {
+        if (typeof options.unit !== "string") {
+          throw new BadRequestError("Unit must be a string ('mm', 'inch', or 'pt').", "INVALID_TOOL_OPTIONS");
+        }
+        const rawUnit = options.unit.trim().toLowerCase();
+        if (!ALLOWED_RESIZE_UNITS.has(rawUnit)) {
+          throw new BadRequestError(
+            `Invalid unit '${options.unit}'. Allowed units: mm, inch, pt`,
+            "INVALID_UNIT"
+          );
+        }
+        unit = rawUnit === "in" ? "inch" : rawUnit;
+      }
+
+      // Convert dimensions to PDF points (72 pt per inch, 25.4 mm per inch)
+      if (unit === "mm") {
+        targetWidthPt = width * (72 / 25.4);
+        targetHeightPt = height * (72 / 25.4);
+      } else if (unit === "inch") {
+        targetWidthPt = width * 72;
+        targetHeightPt = height * 72;
+      } else {
+        targetWidthPt = width;
+        targetHeightPt = height;
+      }
+
+      // Bounds: min 10 pt, max 5000 pt
+      if (targetWidthPt < 10 || targetHeightPt < 10) {
+        throw new BadRequestError(
+          "Custom page dimensions are too small (minimum 10 points equivalent).",
+          "INVALID_DIMENSIONS"
+        );
+      }
+
+      if (targetWidthPt > 5000 || targetHeightPt > 5000) {
+        throw new BadRequestError(
+          "Custom page dimensions exceed maximum allowed size (5000 points equivalent).",
+          "OVERSIZED_DIMENSIONS"
+        );
+      }
+
+      options.width = width;
+      options.height = height;
+      options.unit = unit;
+      options.targetWidthPt = targetWidthPt;
+      options.targetHeightPt = targetHeightPt;
+    } else {
+      const presetDims = STANDARD_PAGE_DIMENSIONS[normalizedSize]!;
+      targetWidthPt = presetDims.width;
+      targetHeightPt = presetDims.height;
+      options.targetWidthPt = targetWidthPt;
+      options.targetHeightPt = targetHeightPt;
+    }
+
+    options.size = normalizedSize;
+    options.orientation = normalizedOrientation;
   }
 
   return {

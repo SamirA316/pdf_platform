@@ -12,7 +12,8 @@
     "test:merge": "tsx tests/phase4_merge.test.ts",
     "test:split": "tsx tests/phase4_split.test.ts",
     "test:rotate": "tsx tests/phase4_rotate.test.ts",
-    "test:organize": "tsx tests/phase4_organize.test.ts"
+    "test:organize": "tsx tests/phase4_organize.test.ts",
+    "test:resize": "tsx tests/phase4_resize.test.ts"
   },
   "keywords": [],
   "author": "",
