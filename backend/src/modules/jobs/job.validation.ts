@@ -839,6 +839,26 @@ export async function validateCreateJob(userId: string, data: ICreateJobDto): Pr
     options.password = password;
   }
 
+  // 4K. Repair PDF Options & Validation
+  if (normalizedTool === "repair-pdf") {
+    if (fileIds.length !== 1) {
+      throw new InvalidInputFileError("Tool 'repair-pdf' accepts exactly 1 input PDF file.");
+    }
+
+    const file = files[0]!;
+    const uploadBase = path.resolve(process.cwd(), "uploads");
+    const physicalPath = path.resolve(uploadBase, file.storageKey);
+
+    if (!fs.existsSync(physicalPath)) {
+      throw new InvalidInputFileError("Physical input PDF does not exist on disk.");
+    }
+
+    const stats = fs.statSync(physicalPath);
+    if (stats.size === 0) {
+      throw new BadRequestError("Cannot repair an empty 0-byte file.", "INVALID_INPUT_FILE");
+    }
+  }
+
   return {
     validatedTool: normalizedTool,
     validatedInputFileIds: fileIds,

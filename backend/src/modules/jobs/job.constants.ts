@@ -26,6 +26,7 @@ export const ALLOWED_TOOLS = new Set<string>([
   "page-numbers",
   "protect-pdf",
   "unlock-pdf",
+  "repair-pdf",
 ]);
 
 /**

@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Phase 4.10 - Repair PDF Tool] - 2026-09-22
+
+### Added
+- Integrated `repair-pdf` tool into the V1 Job Processing System (`/api/v1/jobs`)
+- Added `"repair-pdf"` to `ALLOWED_TOOLS` in `job.constants.ts`
+- Validation logic for `repair-pdf` in `job.validation.ts`:
+  - Exactly 1 input file required, user ownership verified, status `READY`
+  - Rejects 0-byte empty files
+- Multi-tier recovery engine in `backend/src/modules/pdf/processors/repair.processor.ts`:
+  - Stage 1: External `qpdf` linearize/repair attempt if available
+  - Stage 2: External `Ghostscript` re-distillation attempt if available
+  - Stage 3: Resilient internal stream and xref reconstructor engine (detects shifted headers, restores truncated EOF trailers, rebuilds clean object catalog)
+  - Stage 4: Strict 5-point output validation (anti-fake-success guarantee)
+- Frontend integration:
+  - Added `slug === "repair-pdf"` dispatch in `ToolWorkspace.tsx`
+  - Rendered `BasicConfig` with one-click repair workflow
+- Comprehensive test suite `backend/tests/phase4_repair.test.ts` (`npm run test:repair`) covering 8 scenarios (100% pass)
+- Complete documentation: `docs/04-api/repair-pdf.md`, `docs/05-features/repair-pdf.md`, `docs/08-testing/repair-pdf.md`
+
 ## [Phase 4.9 - Unlock PDF Tool] - 2026-09-22
 
 ### Added

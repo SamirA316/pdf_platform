@@ -12,6 +12,7 @@ import { watermarkProcessor } from "../pdf/processors/watermark.processor";
 import { pageNumbersProcessor } from "../pdf/processors/page-numbers.processor";
 import { protectProcessor } from "../pdf/processors/protect.processor";
 import { unlockProcessor } from "../pdf/processors/unlock.processor";
+import { repairProcessor } from "../pdf/processors/repair.processor";
 import { filesService } from "../files/files.service";
 import {
   JobNotFoundError,
@@ -253,6 +254,16 @@ export class JobService {
         resultOutputFileId = result.outputFileId;
         resultMetrics = result.metrics;
         generatedOutputFileIds.push(result.outputFileId);
+      } else if (tool === "repair-pdf") {
+        const result = await repairProcessor.process({
+          jobId,
+          userId,
+          inputFileId: inputFileIds[0]!,
+          options,
+        });
+        resultOutputFileId = result.outputFileId;
+        resultMetrics = result.metrics;
+        generatedOutputFileIds.push(result.outputFileId);
       } else {
         throw new Error(`No processor registered for tool '${tool}'.`);
       }
@@ -325,6 +336,10 @@ export class JobService {
               : err.code === "INVALID_PDF_PASSWORD" || err.message?.includes("Incorrect PDF password")
               ? "Incorrect PDF password provided."
               : "We couldn't unlock this PDF. Please verify your password and try again.")
+          : tool === "repair-pdf"
+          ? (err.code === "PDF_REPAIR_FAILED" || err.message?.includes("repair")
+              ? "We couldn't repair this PDF. The document may be too severely corrupted."
+              : "We couldn't repair this PDF. Please try another file.")
           : "We couldn't process this PDF. Please try another file.";
 
       const errorCode = err.code || "PROCESSING_FAILED";
