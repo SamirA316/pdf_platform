@@ -10,6 +10,8 @@ import { organizeProcessor } from "../pdf/processors/organize.processor";
 import { resizeProcessor } from "../pdf/processors/resize.processor";
 import { watermarkProcessor } from "../pdf/processors/watermark.processor";
 import { pageNumbersProcessor } from "../pdf/processors/page-numbers.processor";
+import { protectProcessor } from "../pdf/processors/protect.processor";
+import { unlockProcessor } from "../pdf/processors/unlock.processor";
 import { filesService } from "../files/files.service";
 import {
   JobNotFoundError,
@@ -17,6 +19,17 @@ import {
   JobCancelFailedError,
   InvalidJobStatusError,
 } from "../../common/errors/AppError";
+
+/**
+ * Strips sensitive keys like passwords before persisting options to database.
+ */
+function sanitizeOptionsForStorage(options: Record<string, any>): Record<string, any> {
+  const sanitized = { ...options };
+  delete sanitized.userPassword;
+  delete sanitized.ownerPassword;
+  delete sanitized.password;
+  return sanitized;
+}
 
 export class JobService {
   /**
@@ -90,7 +103,7 @@ export class JobService {
         status: JobStatus.QUEUED,
         progress: 0,
         inputFileIds: JSON.stringify(validatedInputFileIds),
-        options: JSON.stringify(validatedOptions),
+        options: JSON.stringify(sanitizeOptionsForStorage(validatedOptions)),
       },
     });
 
@@ -220,6 +233,26 @@ export class JobService {
         resultOutputFileId = result.outputFileId;
         resultMetrics = result.metrics;
         generatedOutputFileIds.push(result.outputFileId);
+      } else if (tool === "protect-pdf") {
+        const result = await protectProcessor.process({
+          jobId,
+          userId,
+          inputFileId: inputFileIds[0]!,
+          options,
+        });
+        resultOutputFileId = result.outputFileId;
+        resultMetrics = result.metrics;
+        generatedOutputFileIds.push(result.outputFileId);
+      } else if (tool === "unlock-pdf") {
+        const result = await unlockProcessor.process({
+          jobId,
+          userId,
+          inputFileId: inputFileIds[0]!,
+          options,
+        });
+        resultOutputFileId = result.outputFileId;
+        resultMetrics = result.metrics;
+        generatedOutputFileIds.push(result.outputFileId);
       } else {
         throw new Error(`No processor registered for tool '${tool}'.`);
       }
@@ -236,7 +269,7 @@ export class JobService {
           outputFileId: resultOutputFileId,
           completedAt: new Date(),
           options: JSON.stringify({
-            ...options,
+            ...sanitizeOptionsForStorage(options),
             metrics: resultMetrics,
           }),
         },
@@ -284,7 +317,17 @@ export class JobService {
           ? "We couldn't watermark this PDF. Please try again."
           : tool === "page-numbers"
           ? "We couldn't add page numbers to this PDF. Please try again."
+          : tool === "protect-pdf"
+          ? "We couldn't protect this PDF. Please try again."
+          : tool === "unlock-pdf"
+          ? (err.code === "PDF_NOT_ENCRYPTED" || err.message?.includes("not password-protected")
+              ? "This PDF document is not password-protected."
+              : err.code === "INVALID_PDF_PASSWORD" || err.message?.includes("Incorrect PDF password")
+              ? "Incorrect PDF password provided."
+              : "We couldn't unlock this PDF. Please verify your password and try again.")
           : "We couldn't process this PDF. Please try another file.";
+
+      const errorCode = err.code || "PROCESSING_FAILED";
 
       try {
         // Atomic failure transition: Only mark FAILED if job is currently PROCESSING
@@ -296,7 +339,7 @@ export class JobService {
           data: {
             status: JobStatus.FAILED,
             progress: 0,
-            errorCode: "PROCESSING_FAILED",
+            errorCode,
             errorMessage: failureMessage,
             completedAt: new Date(),
           },

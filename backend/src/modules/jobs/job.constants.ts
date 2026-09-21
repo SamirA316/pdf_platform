@@ -24,6 +24,8 @@ export const ALLOWED_TOOLS = new Set<string>([
   "resize-pdf",
   "watermark-pdf",
   "page-numbers",
+  "protect-pdf",
+  "unlock-pdf",
 ]);
 
 /**

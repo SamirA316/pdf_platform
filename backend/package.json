@@ -15,7 +15,8 @@
     "test:organize": "tsx tests/phase4_organize.test.ts",
     "test:resize": "tsx tests/phase4_resize.test.ts",
     "test:watermark": "tsx tests/phase4_watermark.test.ts",
-    "test:page-numbers": "tsx tests/phase4_page_numbers.test.ts"
+    "test:page-numbers": "tsx tests/phase4_page_numbers.test.ts",
+    "test:protect": "tsx tests/phase4_protect_unlock.test.ts"
   },
   "keywords": [],
   "author": "",

@@ -772,6 +772,73 @@ export async function validateCreateJob(userId: string, data: ICreateJobDto): Pr
     }
   }
 
+  // 4I. Protect PDF Options & Validation
+  if (normalizedTool === "protect-pdf") {
+    if (fileIds.length !== 1) {
+      throw new InvalidInputFileError("Tool 'protect-pdf' accepts exactly 1 input PDF file.");
+    }
+
+    const file = files[0]!;
+    const uploadBase = path.resolve(process.cwd(), "uploads");
+    const physicalPath = path.resolve(uploadBase, file.storageKey);
+
+    if (!fs.existsSync(physicalPath)) {
+      throw new InvalidInputFileError("Physical input PDF does not exist on disk.");
+    }
+
+    let totalPages = 0;
+    try {
+      const pdfBytes = await fs.promises.readFile(physicalPath);
+      const pdfDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
+      totalPages = pdfDoc.getPageCount();
+    } catch {
+      throw new BadRequestError("Unable to read input PDF document.", "INVALID_PDF");
+    }
+
+    if (totalPages < 1) {
+      throw new BadRequestError("The PDF document contains no pages.", "INVALID_PDF_PAGES");
+    }
+
+    const userPassword = typeof options.userPassword === "string" ? options.userPassword : "";
+    if (!userPassword) {
+      throw new BadRequestError("A non-empty 'userPassword' is required to protect the PDF.", "INVALID_PASSWORD");
+    }
+
+    if (userPassword.length > 128) {
+      throw new BadRequestError("Password length cannot exceed 128 characters.", "INVALID_PASSWORD");
+    }
+
+    options.userPassword = userPassword;
+    options.permissions = {
+      print: options.permissions?.print !== false,
+      copy: Boolean(options.permissions?.copy),
+      modify: Boolean(options.permissions?.modify),
+      annotate: Boolean(options.permissions?.annotate),
+    };
+  }
+
+  // 4J. Unlock PDF Options & Validation
+  if (normalizedTool === "unlock-pdf") {
+    if (fileIds.length !== 1) {
+      throw new InvalidInputFileError("Tool 'unlock-pdf' accepts exactly 1 input PDF file.");
+    }
+
+    const file = files[0]!;
+    const uploadBase = path.resolve(process.cwd(), "uploads");
+    const physicalPath = path.resolve(uploadBase, file.storageKey);
+
+    if (!fs.existsSync(physicalPath)) {
+      throw new InvalidInputFileError("Physical input PDF does not exist on disk.");
+    }
+
+    const password = typeof options.password === "string" ? options.password : "";
+    if (!password) {
+      throw new BadRequestError("A password is required to unlock this PDF.", "INVALID_PASSWORD");
+    }
+
+    options.password = password;
+  }
+
   return {
     validatedTool: normalizedTool,
     validatedInputFileIds: fileIds,

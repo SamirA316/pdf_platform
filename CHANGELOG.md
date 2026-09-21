@@ -2,6 +2,43 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Phase 4.9 - Unlock PDF Tool] - 2026-09-22
+
+### Added
+- Integrated `unlock-pdf` tool into the V1 Job Processing System (`/api/v1/jobs`)
+- Added `"unlock-pdf"` to `ALLOWED_TOOLS` in `job.constants.ts`
+- Strict password validation in `job.validation.ts` (requires non-empty password)
+- Decoupled `UnlockProcessor` in `backend/src/modules/pdf/processors/unlock.processor.ts`:
+  - Detects if PDF is password-protected (`PDF_NOT_ENCRYPTED` if already unencrypted)
+  - Validates password against encrypted PDF (`INVALID_PDF_PASSWORD` on mismatch)
+  - Copies pages into a brand new `PDFDocument.create()` to strip all leftover encryption dictionaries
+  - Atomic cleanup on failure
+- Frontend integration:
+  - Reused & specialized `ProtectConfig.tsx` in unlock mode
+  - Handled `slug === "unlock-pdf"` in `ToolWorkspace.tsx`
+- Complete documentation: `docs/04-api/unlock-pdf.md`, `docs/05-features/unlock-pdf.md`, `docs/08-testing/unlock-pdf.md`
+
+## [Phase 4.8 - Protect PDF Tool] - 2026-09-22
+
+### Added
+- Integrated `protect-pdf` tool into the V1 Job Processing System (`/api/v1/jobs`)
+- Added `"protect-pdf"` to `ALLOWED_TOOLS` in `job.constants.ts`
+- Validation logic for `protect-pdf` in `job.validation.ts`:
+  - Exactly 1 input file required, user ownership verified, status `READY`
+  - Validates non-empty `userPassword` (max 128 characters)
+  - Configurable permissions: `print`, `copy`, `modify`, `annotate`
+- Decoupled `ProtectProcessor` in `backend/src/modules/pdf/processors/protect.processor.ts`:
+  - Native AES-256 encryption via `@cantoo/pdf-lib`
+  - Granular permission flags (printing, copying, editing, annotating)
+  - Auto-generates random 128-bit owner password
+  - Zero password leakage: `sanitizeOptionsForStorage()` strips passwords prior to DB writes
+  - Atomic cleanup on processor failure
+- Frontend integration:
+  - Created enhanced `ProtectConfig.tsx` with password visibility toggle, confirm password matching, and permission toggles
+  - Handled `slug === "protect-pdf"` in `ToolWorkspace.tsx`
+- Comprehensive test suite `backend/tests/phase4_protect_unlock.test.ts` (`npm run test:protect`) covering 13 scenarios (100% pass)
+- Complete documentation: `docs/04-api/protect-pdf.md`, `docs/05-features/protect-pdf.md`, `docs/08-testing/protect-pdf.md`
+
 ## [Phase 4.7 - Page Numbers Tool] - 2026-09-22
 
 ### Added
