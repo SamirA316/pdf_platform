@@ -8,6 +8,7 @@ import { splitProcessor } from "../pdf/processors/split.processor";
 import { rotateProcessor } from "../pdf/processors/rotate.processor";
 import { organizeProcessor } from "../pdf/processors/organize.processor";
 import { resizeProcessor } from "../pdf/processors/resize.processor";
+import { watermarkProcessor } from "../pdf/processors/watermark.processor";
 import { filesService } from "../files/files.service";
 import {
   JobNotFoundError,
@@ -198,6 +199,16 @@ export class JobService {
         resultOutputFileId = result.outputFileId;
         resultMetrics = result.metrics;
         generatedOutputFileIds.push(result.outputFileId);
+      } else if (tool === "watermark-pdf") {
+        const result = await watermarkProcessor.process({
+          jobId,
+          userId,
+          inputFileId: inputFileIds[0]!,
+          options,
+        });
+        resultOutputFileId = result.outputFileId;
+        resultMetrics = result.metrics;
+        generatedOutputFileIds.push(result.outputFileId);
       } else {
         throw new Error(`No processor registered for tool '${tool}'.`);
       }
@@ -258,6 +269,8 @@ export class JobService {
           ? "We couldn't organize this PDF. Please try again."
           : tool === "resize-pdf"
           ? "We couldn't resize this PDF. Please try again."
+          : tool === "watermark-pdf"
+          ? "We couldn't watermark this PDF. Please try again."
           : "We couldn't process this PDF. Please try another file.";
 
       try {

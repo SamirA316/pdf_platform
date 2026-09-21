@@ -23,13 +23,33 @@ const fileStorage = multer.diskStorage({
   },
   filename: (req, file, cb) => {
     const randomHex = crypto.randomBytes(8).toString("hex");
-    cb(null, `file_${randomHex}.pdf`);
+    const ext = path.extname(file.originalname).toLowerCase();
+    const safeExt = [".pdf", ".png", ".jpg", ".jpeg"].includes(ext) ? ext : ".pdf";
+    cb(null, `file_${randomHex}${safeExt}`);
   },
 });
 
 const pdfOnlyFilter = (req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
   const ext = path.extname(file.originalname).toLowerCase();
   const mime = (file.mimetype || "").toLowerCase();
+
+  const allowImage =
+    req.query?.type === "image" ||
+    req.query?.allowImages === "true" ||
+    req.headers?.["x-allow-image"] === "true";
+
+  if (allowImage) {
+    const isImage =
+      [".png", ".jpg", ".jpeg"].includes(ext) &&
+      ["image/png", "image/jpeg", "image/jpg"].includes(mime);
+    const isPdf = ext === ".pdf" && mime === "application/pdf";
+    if (!isImage && !isPdf) {
+      return cb(
+        new UnsupportedFormatError("Allowed formats: .png, .jpg, .jpeg, .pdf")
+      );
+    }
+    return cb(null, true);
+  }
 
   if (ext !== ".pdf" || mime !== "application/pdf") {
     return cb(new UnsupportedFormatError("Only PDF files are supported. Allowed MIME: application/pdf, extension: .pdf"));

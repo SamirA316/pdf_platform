@@ -13,7 +13,8 @@
     "test:split": "tsx tests/phase4_split.test.ts",
     "test:rotate": "tsx tests/phase4_rotate.test.ts",
     "test:organize": "tsx tests/phase4_organize.test.ts",
-    "test:resize": "tsx tests/phase4_resize.test.ts"
+    "test:resize": "tsx tests/phase4_resize.test.ts",
+    "test:watermark": "tsx tests/phase4_watermark.test.ts"
   },
   "keywords": [],
   "author": "",

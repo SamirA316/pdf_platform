@@ -22,6 +22,7 @@ export const ALLOWED_TOOLS = new Set<string>([
   "rotate-pdf",
   "organize-pdf",
   "resize-pdf",
+  "watermark-pdf",
 ]);
 
 /**
@@ -81,4 +82,20 @@ export const STANDARD_PAGE_DIMENSIONS: Record<string, { width: number; height: n
   letter: { width: 612.0, height: 792.0 },
   legal: { width: 612.0, height: 1008.0 },
 };
+
+/**
+ * Watermark PDF Allowed Types
+ */
+export const ALLOWED_WATERMARK_TYPES = new Set<string>(["text", "image"]);
+
+/**
+ * Watermark PDF Allowed Positions
+ */
+export const ALLOWED_WATERMARK_POSITIONS = new Set<string>([
+  "center",
+  "top-left",
+  "top-right",
+  "bottom-left",
+  "bottom-right",
+]);
 

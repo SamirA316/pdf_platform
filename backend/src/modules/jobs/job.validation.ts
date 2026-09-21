@@ -11,6 +11,8 @@ import {
   ALLOWED_RESIZE_UNITS,
   ALLOWED_ORIENTATIONS,
   STANDARD_PAGE_DIMENSIONS,
+  ALLOWED_WATERMARK_TYPES,
+  ALLOWED_WATERMARK_POSITIONS,
   JobStatus,
 } from "./job.constants";
 import { ICreateJobDto } from "./job.types";
@@ -34,7 +36,10 @@ export async function validateCreateJob(userId: string, data: ICreateJobDto): Pr
     throw new InvalidToolError("A valid 'tool' string must be provided.");
   }
 
-  const normalizedTool = data.tool.trim().toLowerCase();
+  let normalizedTool = data.tool.trim().toLowerCase();
+  if (normalizedTool === "watermark") {
+    normalizedTool = "watermark-pdf";
+  }
   if (!ALLOWED_TOOLS.has(normalizedTool)) {
     throw new InvalidToolError(
       `Tool '${data.tool}' is not recognized or unsupported. Allowed: ${Array.from(ALLOWED_TOOLS).join(", ")}`
@@ -528,6 +533,146 @@ export async function validateCreateJob(userId: string, data: ICreateJobDto): Pr
 
     options.size = normalizedSize;
     options.orientation = normalizedOrientation;
+  }
+
+  // 4G. Watermark PDF Options & Validation
+  if (normalizedTool === "watermark-pdf") {
+    if (fileIds.length !== 1) {
+      throw new InvalidInputFileError("Tool 'watermark-pdf' accepts exactly 1 input PDF file.");
+    }
+
+    const file = files[0]!;
+    const uploadBase = path.resolve(process.cwd(), "uploads");
+    const physicalPath = path.resolve(uploadBase, file.storageKey);
+
+    if (!fs.existsSync(physicalPath)) {
+      throw new InvalidInputFileError("Physical input PDF does not exist on disk.");
+    }
+
+    let totalPages = 0;
+    try {
+      const pdfBytes = await fs.promises.readFile(physicalPath);
+      const pdfDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
+      totalPages = pdfDoc.getPageCount();
+    } catch {
+      throw new BadRequestError("Unable to read input PDF document.", "INVALID_PDF");
+    }
+
+    if (totalPages < 1) {
+      throw new BadRequestError("The PDF document contains no pages.", "INVALID_PDF_PAGES");
+    }
+
+    // Default type to text if not specified
+    const type = (options.type || "text").toString().trim().toLowerCase();
+    if (!ALLOWED_WATERMARK_TYPES.has(type)) {
+      throw new BadRequestError(
+        `Invalid watermark type '${options.type}'. Allowed: text, image`,
+        "INVALID_TOOL_OPTIONS"
+      );
+    }
+    options.type = type;
+
+    // Validate position
+    let position = (options.position || "center").toString().trim().toLowerCase();
+    if (!ALLOWED_WATERMARK_POSITIONS.has(position)) {
+      throw new BadRequestError(
+        `Invalid watermark position '${options.position}'. Allowed: center, top-left, top-right, bottom-left, bottom-right`,
+        "INVALID_TOOL_OPTIONS"
+      );
+    }
+    options.position = position;
+
+    // Validate opacity
+    let opacity = options.opacity !== undefined ? Number(options.opacity) : (type === "text" ? 0.3 : 0.4);
+    if (isNaN(opacity) || opacity < 0.01 || opacity > 1.0) {
+      throw new BadRequestError("Watermark opacity must be a number between 0.01 and 1.0.", "INVALID_TOOL_OPTIONS");
+    }
+    options.opacity = opacity;
+
+    // Validate rotation
+    let rotation = options.rotation !== undefined ? Number(options.rotation) : (type === "text" ? 45 : 0);
+    if (isNaN(rotation)) {
+      throw new BadRequestError("Watermark rotation must be a valid numeric degree.", "INVALID_TOOL_OPTIONS");
+    }
+    options.rotation = ((rotation % 360) + 360) % 360;
+
+    // Validate pages specification
+    if (options.pages !== undefined && options.pages !== "all") {
+      if (!Array.isArray(options.pages) || options.pages.length === 0) {
+        throw new BadRequestError("Pages option must be 'all' or a non-empty array of page numbers.", "INVALID_TOOL_OPTIONS");
+      }
+      const pageList: number[] = [];
+      for (const p of options.pages) {
+        const pageNum = Number(p);
+        if (!Number.isInteger(pageNum)) {
+          throw new BadRequestError(`Page number '${p}' must be an integer.`, "INVALID_PAGE");
+        }
+        if (pageNum < 1 || pageNum > totalPages) {
+          throw new BadRequestError(
+            `Page ${pageNum} is out of bounds (document has ${totalPages} pages).`,
+            "PAGE_OUT_OF_BOUNDS"
+          );
+        }
+        pageList.push(pageNum);
+      }
+      options.pages = pageList;
+    } else {
+      options.pages = "all";
+    }
+
+    if (type === "text") {
+      const text = typeof options.text === "string" ? options.text.trim() : "";
+      if (!text) {
+        throw new BadRequestError("Watermark text is required and cannot be empty.", "INVALID_WATERMARK_TEXT");
+      }
+      if (text.length > 200) {
+        throw new BadRequestError("Watermark text cannot exceed 200 characters.", "INVALID_WATERMARK_TEXT");
+      }
+      options.text = text;
+
+      let fontSize = options.fontSize !== undefined ? Number(options.fontSize) : 40;
+      if (isNaN(fontSize) || fontSize < 6 || fontSize > 200) {
+        throw new BadRequestError("Font size must be a number between 6 and 200.", "INVALID_TOOL_OPTIONS");
+      }
+      options.fontSize = fontSize;
+
+      let color = typeof options.color === "string" && options.color.trim() ? options.color.trim() : "#000000";
+      options.color = color;
+    } else if (type === "image") {
+      const imageFileId = typeof options.imageFileId === "string" ? options.imageFileId.trim() : "";
+      if (!imageFileId) {
+        throw new BadRequestError("Image watermark requires 'imageFileId'.", "INVALID_WATERMARK_IMAGE");
+      }
+
+      const imgDbFile = await prisma.file.findFirst({
+        where: { id: imageFileId, userId },
+      });
+
+      if (!imgDbFile) {
+        throw new BadRequestError("Watermark image file not found or not owned by user.", "INVALID_INPUT_FILE");
+      }
+
+      if (imgDbFile.status !== "READY") {
+        throw new BadRequestError("Watermark image file is not ready for processing.", "INVALID_INPUT_FILE");
+      }
+
+      const allowedMimes = new Set(["image/png", "image/jpeg", "image/jpg"]);
+      if (!allowedMimes.has(imgDbFile.mimeType.toLowerCase())) {
+        throw new BadRequestError("Watermark image must be a PNG or JPEG file.", "INVALID_MIME_TYPE");
+      }
+
+      const imgPhysicalPath = path.resolve(uploadBase, imgDbFile.storageKey);
+      if (!fs.existsSync(imgPhysicalPath)) {
+        throw new BadRequestError("Watermark image physical file is missing on disk.", "INVALID_INPUT_FILE");
+      }
+
+      let scale = options.scale !== undefined ? Number(options.scale) : 0.5;
+      if (isNaN(scale) || scale < 0.05 || scale > 5.0) {
+        throw new BadRequestError("Watermark image scale must be a number between 0.05 and 5.0.", "INVALID_TOOL_OPTIONS");
+      }
+      options.scale = scale;
+      options.imageFileId = imageFileId;
+    }
   }
 
   return {

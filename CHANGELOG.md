@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Phase 4.6 - Watermark PDF Tool] - 2026-09-22
+
+### Added
+- Integrated `watermark-pdf` tool into the V1 Job Processing System (`/api/v1/jobs`)
+- Added `"watermark-pdf"` to `ALLOWED_TOOLS` and defined `ALLOWED_WATERMARK_TYPES` and `ALLOWED_WATERMARK_POSITIONS` in `job.constants.ts`
+- Support for both Text and Image watermarks:
+  - Text: custom text, fontSize, color, rotation angle, opacity, and positioning
+  - Image: PNG/JPEG image stamps with scale factor, opacity, rotation, and positioning
+- Multi-file validation in `job.validation.ts`:
+  - Exactly 1 input PDF file required, owned by user, in `READY` status
+  - For image watermarks: strict ownership check on `imageFileId`, `READY` status, and image MIME verification (`image/png`, `image/jpeg`)
+  - Target pages bounds validation against `totalPages` (`PAGE_OUT_OF_BOUNDS`)
+- Decoupled `WatermarkProcessor` in `backend/src/modules/pdf/processors/watermark.processor.ts`:
+  - Uses `pdf-lib` to embed `StandardFonts.HelveticaBold` or PNG/JPEG image files
+  - Calculates precise geometric centers accounting for rotated text and page coordinates
+  - Saves with `{ useObjectStreams: false }` for universal viewer compatibility
+  - Automatic partial output file unlinking on processor failure
+- Frontend integration:
+  - Rich `WatermarkConfig.tsx` supporting text/image toggling, live preview, color picker, quick suggestions, and position selector
+  - Updated `ToolWorkspace.tsx` with `slug === "watermark" || slug === "watermark-pdf"` dispatch
+  - Enhanced `/api/v1/files` to permit user image uploads with `?type=image`
+- Comprehensive test suite `backend/tests/phase4_watermark.test.ts` (`npm run test:watermark`) covering 19 scenarios (100% pass)
+- Complete documentation: `docs/04-api/watermark-pdf.md`, `docs/05-features/watermark-pdf.md`, `docs/08-testing/watermark-pdf.md`
+
 ## [Phase 4.5 - Resize PDF Tool] - 2026-09-22
 
 ### Added

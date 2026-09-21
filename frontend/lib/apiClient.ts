@@ -96,8 +96,9 @@ export async function uploadFileToV1(file: File): Promise<V1UploadedFile> {
   const formData = new FormData();
   formData.append("file", file);
 
+  const endpoint = file.type.startsWith("image/") ? "/api/v1/files?type=image" : "/api/v1/files";
   const res = await apiClient<{ success: boolean; data: { file: V1UploadedFile } }>(
-    "/api/v1/files",
+    endpoint,
     { data: formData }
   );
 
