@@ -14,6 +14,7 @@ import {
   ALLOWED_WATERMARK_TYPES,
   ALLOWED_WATERMARK_POSITIONS,
   ALLOWED_PAGE_NUMBER_POSITIONS,
+  ALLOWED_PDFA_VERSIONS,
   JobStatus,
 } from "./job.constants";
 import { ICreateJobDto } from "./job.types";
@@ -857,6 +858,43 @@ export async function validateCreateJob(userId: string, data: ICreateJobDto): Pr
     if (stats.size === 0) {
       throw new BadRequestError("Cannot repair an empty 0-byte file.", "INVALID_INPUT_FILE");
     }
+  }
+
+  // 4L. PDF to PDF/A Options & Validation
+  if (normalizedTool === "pdf-to-pdfa") {
+    if (fileIds.length !== 1) {
+      throw new InvalidInputFileError("Tool 'pdf-to-pdfa' accepts exactly 1 input PDF file.");
+    }
+
+    const file = files[0]!;
+    const uploadBase = path.resolve(process.cwd(), "uploads");
+    const physicalPath = path.resolve(uploadBase, file.storageKey);
+
+    if (!fs.existsSync(physicalPath)) {
+      throw new InvalidInputFileError("Physical input PDF does not exist on disk.");
+    }
+
+    let totalPages = 0;
+    try {
+      const pdfBytes = await fs.promises.readFile(physicalPath);
+      const pdfDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
+      totalPages = pdfDoc.getPageCount();
+    } catch {
+      throw new BadRequestError("Unable to read input PDF document.", "INVALID_PDF");
+    }
+
+    if (totalPages < 1) {
+      throw new BadRequestError("The PDF document contains no pages.", "INVALID_PDF_PAGES");
+    }
+
+    const requestedVersion = options.version || "PDF/A-2b";
+    if (!ALLOWED_PDFA_VERSIONS.has(requestedVersion)) {
+      throw new BadRequestError(
+        `Invalid PDF/A version '${requestedVersion}'. Allowed: ${Array.from(ALLOWED_PDFA_VERSIONS).join(", ")}`,
+        "INVALID_TOOL_OPTIONS"
+      );
+    }
+    options.version = requestedVersion;
   }
 
   return {

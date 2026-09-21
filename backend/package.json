@@ -17,7 +17,8 @@
     "test:watermark": "tsx tests/phase4_watermark.test.ts",
     "test:page-numbers": "tsx tests/phase4_page_numbers.test.ts",
     "test:protect": "tsx tests/phase4_protect_unlock.test.ts",
-    "test:repair": "tsx tests/phase4_repair.test.ts"
+    "test:repair": "tsx tests/phase4_repair.test.ts",
+    "test:pdfa": "tsx tests/phase4_pdfa.test.ts"
   },
   "keywords": [],
   "author": "",

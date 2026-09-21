@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Phase 4.11 - PDF to PDF/A Archival Tool] - 2026-09-22
+
+### Added
+- Integrated `pdf-to-pdfa` tool into the V1 Job Processing System (`/api/v1/jobs`)
+- Added `"pdf-to-pdfa"` to `ALLOWED_TOOLS` and defined `ALLOWED_PDFA_VERSIONS` in `job.constants.ts`
+- Supported ISO archival standards:
+  - `PDF/A-1b` (ISO 19005-1:2005 Level B)
+  - `PDF/A-2b` (ISO 19005-2:2011 Level B)
+  - `PDF/A-3b` (ISO 19005-3:2012 Level B)
+- Validation logic for `pdf-to-pdfa` in `job.validation.ts`:
+  - Exactly 1 input file required, user ownership verified, status `READY`
+  - Rejection of encrypted documents (prohibited by ISO 19005 mandate)
+  - Version conformance validation
+- Decoupled `PdfaProcessor` in `backend/src/modules/pdf/processors/pdfa.processor.ts`:
+  - Embeds standard XMP identification metadata stream (`xmlns:pdfaid="http://www.aiim.org/pdfa/ns/id/"`)
+  - Registers standard sRGB OutputIntent dictionary (`/GTS_PDFA1`) in document catalog
+  - Preserves visual streams while stripping non-conforming elements
+  - Multi-point output compliance validation (anti-fake-success guarantee)
+- Frontend integration:
+  - Created `PdfaConfig.tsx` with archival version cards, explanations, and compliance guarantee
+  - Handled `slug === "pdf-to-pdfa"` in `ToolWorkspace.tsx`
+- Comprehensive test suite `backend/tests/phase4_pdfa.test.ts` (`npm run test:pdfa`) covering 9 scenarios (100% pass)
+- Complete documentation: `docs/04-api/pdf-to-pdfa.md`, `docs/05-features/pdf-to-pdfa.md`, `docs/08-testing/pdf-to-pdfa.md`
+
 ## [Phase 4.10 - Repair PDF Tool] - 2026-09-22
 
 ### Added

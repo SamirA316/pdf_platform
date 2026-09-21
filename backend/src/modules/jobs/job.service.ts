@@ -13,6 +13,7 @@ import { pageNumbersProcessor } from "../pdf/processors/page-numbers.processor";
 import { protectProcessor } from "../pdf/processors/protect.processor";
 import { unlockProcessor } from "../pdf/processors/unlock.processor";
 import { repairProcessor } from "../pdf/processors/repair.processor";
+import { pdfaProcessor } from "../pdf/processors/pdfa.processor";
 import { filesService } from "../files/files.service";
 import {
   JobNotFoundError,
@@ -264,6 +265,16 @@ export class JobService {
         resultOutputFileId = result.outputFileId;
         resultMetrics = result.metrics;
         generatedOutputFileIds.push(result.outputFileId);
+      } else if (tool === "pdf-to-pdfa") {
+        const result = await pdfaProcessor.process({
+          jobId,
+          userId,
+          inputFileId: inputFileIds[0]!,
+          options,
+        });
+        resultOutputFileId = result.outputFileId;
+        resultMetrics = result.metrics;
+        generatedOutputFileIds.push(result.outputFileId);
       } else {
         throw new Error(`No processor registered for tool '${tool}'.`);
       }
@@ -340,6 +351,10 @@ export class JobService {
           ? (err.code === "PDF_REPAIR_FAILED" || err.message?.includes("repair")
               ? "We couldn't repair this PDF. The document may be too severely corrupted."
               : "We couldn't repair this PDF. Please try another file.")
+          : tool === "pdf-to-pdfa"
+          ? (err.code === "ENCRYPTED_PDF_REJECTED"
+              ? "Password-protected encrypted PDFs cannot be converted to PDF/A. Please unlock the file first."
+              : "We couldn't convert this PDF to PDF/A. Please try another file.")
           : "We couldn't process this PDF. Please try another file.";
 
       const errorCode = err.code || "PROCESSING_FAILED";

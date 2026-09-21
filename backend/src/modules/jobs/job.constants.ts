@@ -27,6 +27,7 @@ export const ALLOWED_TOOLS = new Set<string>([
   "protect-pdf",
   "unlock-pdf",
   "repair-pdf",
+  "pdf-to-pdfa",
 ]);
 
 /**
@@ -113,5 +114,14 @@ export const ALLOWED_PAGE_NUMBER_POSITIONS = new Set<string>([
   "top-center",
   "top-left",
   "top-right",
+]);
+
+/**
+ * PDF/A Conformance Versions
+ */
+export const ALLOWED_PDFA_VERSIONS = new Set<string>([
+  "PDF/A-1b",
+  "PDF/A-2b",
+  "PDF/A-3b",
 ]);
 

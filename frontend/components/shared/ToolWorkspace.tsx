@@ -18,6 +18,7 @@ import { WatermarkConfig } from "@/components/tools/WatermarkConfig";
 import { OrganizeConfig } from "@/components/tools/OrganizeConfig";
 import { EditConfig } from "@/components/tools/EditConfig";
 import { PageNumbersConfig } from "@/components/tools/PageNumbersConfig";
+import { PdfaConfig } from "@/components/tools/PdfaConfig";
 
 type FlowState = "upload" | "configure" | "processing" | "result" | "error";
 
@@ -660,6 +661,57 @@ export function ToolWorkspace({ slug, accept, maxSizeMB, actionType, allowMultip
       }
     }
 
+    if (slug === "pdf-to-pdfa") {
+      try {
+        if (!files || files.length === 0) {
+          throw new Error("Please select a PDF file to convert to PDF/A.");
+        }
+
+        const v1File = await uploadFileToV1(files[0]!);
+
+        const job = await createJob({
+          tool: "pdf-to-pdfa",
+          inputFileIds: [v1File.id],
+          options: config ? (config as Record<string, any>) : { version: "PDF/A-2b" },
+        });
+
+        // Poll job status until COMPLETED or FAILED
+        let active = true;
+        while (active) {
+          await new Promise((res) => setTimeout(res, 1000));
+          const updatedJob = await getJob(job.id);
+
+          if (updatedJob.status === "COMPLETED") {
+            active = false;
+            setIsV1JobResult(true);
+
+            if (updatedJob.outputFileId) {
+              setResultId(updatedJob.outputFileId);
+            }
+            if (updatedJob.outputFile?.originalName) {
+              setResultFileName(updatedJob.outputFile.originalName);
+            } else {
+              setResultFileName("archived-document.pdf");
+            }
+
+            setFlowState("result");
+            return;
+          } else if (updatedJob.status === "FAILED" || updatedJob.status === "CANCELLED") {
+            active = false;
+            throw new Error(updatedJob.errorMessage || "We couldn't convert this PDF to PDF/A. Please try again.");
+          }
+        }
+      } catch (err: any) {
+        console.error("Job processing error for pdf-to-pdfa:", err);
+        setProcessError({
+          message: err?.message || "We couldn't convert this PDF to PDF/A. Please try again.",
+          isAuth: false,
+        });
+        setFlowState("error");
+        return;
+      }
+    }
+
     // Phase 3 Proof-of-Concept: Route Compress PDF through Job System
     if (slug === "compress-pdf" && v1FileId) {
       try {
@@ -915,6 +967,7 @@ export function ToolWorkspace({ slug, accept, maxSizeMB, actionType, allowMultip
         if (slug === "watermark") return <WatermarkConfig files={files} onProcess={handleProcess} />;
         if (slug === "organize-pdf") return <OrganizeConfig files={files} onProcess={handleProcess} />;
         if (slug === "page-numbers") return <PageNumbersConfig files={files} onProcess={handleProcess} />;
+        if (slug === "pdf-to-pdfa") return <PdfaConfig files={files} onProcess={handleProcess} />;
         return <BasicConfig files={files} onProcess={handleProcess} title={title} />;
     }
   };
