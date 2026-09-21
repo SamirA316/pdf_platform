@@ -342,7 +342,7 @@ async function runTests() {
       Authorization: `Bearer ${tokenA}`,
     },
     body: JSON.stringify({
-      tool: "organize-pdf",
+      tool: "unsupported-tool",
       inputFileIds: [fileAId],
     }),
   });
