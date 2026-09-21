@@ -1,8 +1,8 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "../common/prisma";
+import { UnauthorizedError } from "../common/errors/AppError";
 
-const prisma = new PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET || "super-secret-jwt-key-replace-in-production";
 
 export const GUEST_USER_ID = "guest-user-account";
@@ -71,7 +71,7 @@ export const requireAuth = async (req: AuthRequest, res: Response, next: NextFun
 
 /**
  * requireStrictAuth: Strictly requires a valid JWT token.
- * Used for sensitive endpoints like account settings or personal profile (/api/auth/me).
+ * Used for authenticated endpoints like account settings (/api/auth/me) and files (/api/v1/files).
  */
 export const requireStrictAuth = (req: AuthRequest, res: Response, next: NextFunction): void => {
   try {
@@ -86,15 +86,14 @@ export const requireStrictAuth = (req: AuthRequest, res: Response, next: NextFun
     }
 
     if (!token) {
-      res.status(401).json({ error: "Unauthorized" });
-      return;
+      return next(new UnauthorizedError("Authentication required.", "UNAUTHORIZED"));
     }
 
     const decoded = jwt.verify(token, JWT_SECRET) as { id: string };
     req.userId = decoded.id;
     next();
   } catch (error) {
-    res.status(401).json({ error: "Invalid or expired token" });
+    return next(new UnauthorizedError("Invalid or expired authentication token.", "UNAUTHORIZED"));
   }
 };
 

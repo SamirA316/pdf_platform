@@ -3,6 +3,10 @@ dist
 .env
 .env.*
 !.env.example
-dev.db
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
 *.log
 uploads/
+

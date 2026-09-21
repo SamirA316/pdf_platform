@@ -273,13 +273,13 @@ export const logout = (req: Request, res: Response): void => {
 export const mockOAuthLogin = async (req: Request, res: Response): Promise<void> => {
   try {
     const provider = (req.params.provider as string)?.toUpperCase();
-    const email = `mock_${provider.toLowerCase()}@example.com`;
+    const email = `${provider.toLowerCase()}.user@example.com`;
 
     let user = await prisma.user.findUnique({ where: { email } });
     if (!user) {
       user = await prisma.user.create({
         data: {
-          name: `Mock ${provider} User`,
+          name: `${provider} User`,
           email,
           password: "",
           isVerified: true,

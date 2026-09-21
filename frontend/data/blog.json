@@ -24,9 +24,9 @@
       "readTime": "5 min read",
       "color": "bg-blue-50 text-blue-600",
       "author": {
-        "name": "Alice Security",
-        "role": "Security Researcher",
-        "avatar": "A"
+        "name": "Samir Ansari",
+        "role": "Security Lead",
+        "avatar": "S"
       },
       "content": "\n      <p class=\"text-xl leading-relaxed mb-8 font-medium\">Securing your documents is more important now than ever. Here is how you can ensure your PDFs are safe.</p>\n      <h2 class=\"text-3xl mt-12 mb-6 tracking-tight\">1. Use Strong Passwords</h2>\n      <p class=\"mb-6 leading-relaxed\">Always use AES-256 encryption when exporting your PDFs. QuickPDF automatically uses this standard when you use our Protect PDF tool.</p>\n    "
     },
@@ -39,9 +39,9 @@
       "readTime": "4 min read",
       "color": "bg-green-50 text-green-600",
       "author": {
-        "name": "Bob Optimizer",
-        "role": "Content Creator",
-        "avatar": "B"
+        "name": "Aarav Patel",
+        "role": "Performance Engineer",
+        "avatar": "A"
       },
       "content": "\n      <p class=\"text-xl leading-relaxed mb-8 font-medium\">Email attachments can be frustrating. Here is how you can shrink those PDFs down to a manageable size.</p>\n      <h2 class=\"text-3xl mt-12 mb-6 tracking-tight\">Understanding Compression</h2>\n      <p class=\"mb-6 leading-relaxed\">Most of the size in a PDF comes from unoptimized images. By downscaling images to 144 DPI, you can save massive amounts of space without noticeable quality loss on screens.</p>\n    "
     },
@@ -69,9 +69,9 @@
       "readTime": "6 min read",
       "color": "bg-yellow-50 text-yellow-700",
       "author": {
-        "name": "Sarah Workflow",
+        "name": "Priya Sharma",
         "role": "Product Manager",
-        "avatar": "S"
+        "avatar": "P"
       },
       "content": "\n      <p class=\"text-xl leading-relaxed mb-8 font-medium\">Are you getting the most out of QuickPDF? Here are some features you might have missed.</p>\n      <h2 class=\"text-3xl mt-12 mb-6 tracking-tight\">Batch Processing</h2>\n      <p class=\"mb-6 leading-relaxed\">Did you know you can drag and drop up to 100 files at once? Our engine will process them all in parallel.</p>\n    "
     },
@@ -99,9 +99,9 @@
       "readTime": "5 min read",
       "color": "bg-orange-50 text-orange-600",
       "author": {
-        "name": "Legal Team",
-        "role": "Compliance",
-        "avatar": "L"
+        "name": "QuickPDF Legal",
+        "role": "Compliance Team",
+        "avatar": "Q"
       },
       "content": "\n      <p class=\"text-xl leading-relaxed mb-8 font-medium\">Digital signatures are no longer just a convenience; they are a requirement for modern business.</p>\n      <h2 class=\"text-3xl mt-12 mb-6 tracking-tight\">Cryptographic Proof</h2>\n      <p class=\"mb-6 leading-relaxed\">The future lies in blockchain-backed cryptographic proofs that ensure a document has not been tampered with since signing.</p>\n    "
     }

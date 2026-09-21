@@ -1,0 +1,120 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+## [Phase 4.3 - Rotate PDF Tool] - 2026-09-22
+
+### Added
+- Integrated `rotate-pdf` tool into the V1 Job Processing System (`/api/v1/jobs`)
+- Added `"rotate-pdf"` to `ALLOWED_TOOLS` and defined `ALLOWED_ROTATION_ANGLES = new Set([90, 180, 270])`
+- Added safeguard in `job.validation.ts`: `MAX_SPLIT_OUTPUT_FILES = 100` (`MAX_OUTPUTS_EXCEEDED`) preventing resource abuse in `split-pdf`
+- Validation logic for `rotate-pdf`:
+  - Exactly 1 input file required
+  - Strict ownership, `READY` status, and `application/pdf` MIME verification
+  - Global rotation angle validation (90, 180, 270) with negative angle normalization
+  - Selective per-page rotation validation: integer pages, page boundary checking (`PAGE_OUT_OF_BOUNDS`), allowed angle verification
+- Decoupled `RotateProcessor` in `backend/src/modules/pdf/processors/rotate.processor.ts`:
+  - Uses `pdf-lib` via `page.getRotation()` and `page.setRotation(degrees(newAngle))`
+  - Supports cumulative rotation normalization on pre-rotated documents: `(currentAngle + deltaAngle) % 360`
+  - Saves with `{ useObjectStreams: false }` for universal viewer compatibility
+  - Automatic partial output file unlinking on processor failure
+- Frontend integration:
+  - Interactive `RotateConfig.tsx` with live animated document orientation preview
+  - Quick action buttons: "Right (+90°)", "Left (-90°)", "Flip (180°)", "Reset (0°)"
+  - Per-page selective rotation mode with strict numeric validation
+  - `ToolWorkspace.tsx` integrated with `slug === "rotate-pdf"` dispatch and single-file download
+- Comprehensive test suite `backend/tests/phase4_rotate.test.ts` (`npm run test:rotate`) covering 13 scenarios (100% pass)
+- Complete documentation: `docs/04-api/rotate-pdf.md`, `docs/05-features/rotate-pdf.md`, `docs/08-testing/rotate-pdf.md`
+
+## [Phase 4.2 - Split PDF Tool] - 2026-09-22
+
+### Added
+- Integrated `split-pdf` tool into the V1 Job Processing System (`/api/v1/jobs`)
+- Relational 1-to-many output files architecture:
+  - Added `jobId` foreign key to `File` model (`sourceJob Job? @relation("JobProducedFiles")`) with index `@@index([jobId])`
+  - Added `outputFiles File[] @relation("JobProducedFiles")` to `Job` model
+  - Preserved `Job.outputFileId` for backwards compatibility with single-file output jobs (`compress-pdf`, `merge-pdf`)
+  - Prisma migration `20260921191934_add_job_multi_output_files`
+- Implemented 3 split modes:
+  - **Mode A (`ranges`)**: Extracts multiple custom page intervals into distinct output PDFs (e.g. `doc_1-3.pdf`, `doc_4-7.pdf`)
+  - **Mode B (`pages`)**: Extracts selected page numbers into a single consolidated output PDF (e.g. `doc_pages_2_5_8.pdf`)
+  - **Mode C (`every-page`)**: Extracts every page of the document into its own individual 1-page PDF
+- Strict validation in `job.validation.ts`:
+  - Exactly 1 input file required
+  - Strict ownership and `READY` status verification
+  - Range validation: integer start/end, `end >= start`, `end <= totalPages`, non-overlapping ranges (`OVERLAPPING_PAGE_RANGES`)
+  - Page selection validation: 1-indexed integers, bounded within total pages, rejection of duplicate pages (`DUPLICATE_PAGE`)
+- Decoupled `SplitProcessor` in `backend/src/modules/pdf/processors/split.processor.ts`:
+  - Uses `pdf-lib` with `{ useObjectStreams: false }` for maximum reader compatibility
+  - Clean error recovery: immediately purges all generated physical files and DB records on failure
+  - Multi-output atomic cancellation: purges all generated output files from disk and DB if job is cancelled during execution
+- Frontend integration:
+  - Redesigned `SplitConfig.tsx` with modern tabbed interface for all 3 modes, range addition/removal, and client-side pre-validation
+  - Updated `ToolWorkspace.tsx` to upload file, dispatch `split-pdf` job, and render multi-file results
+  - Enhanced `StateCards.tsx` to display split PDF file lists with individual download buttons and bulk download support
+- Comprehensive test suite `backend/tests/phase4_split.test.ts` (`npm run test:split`) covering 14 scenarios (100% pass)
+- Complete documentation: `docs/04-api/split-pdf.md`, `docs/05-features/split-pdf.md`, `docs/08-testing/split-pdf.md`
+
+## [Phase 4.1 - Merge PDF Tool] - 2026-09-22
+
+### Added
+- Integrated `merge-pdf` tool into the V1 Job Processing System (`/api/v1/jobs`)
+- Added `merge-pdf` to `ALLOWED_TOOLS` whitelist in `job.constants.ts`
+- Strict input validation in `job.validation.ts`:
+  - Enforced minimum 2 input files requirement (`INVALID_INPUT_FILE`)
+  - Duplicate input file IDs rejection
+  - Strict user ownership, `READY` status, and `application/pdf` MIME verification
+  - Preservation of user-selected input file order
+- Decoupled `MergeProcessor` in `backend/src/modules/pdf/processors/merge.processor.ts`:
+  - Loads files sequentially using `pdf-lib` and concatenates all pages into a new `PDFDocument`
+  - Output written to secure user directory (`uploads/users/{userId}/file_{randomHex}.pdf`)
+  - Created output `File` DB record with calculated metrics (`pageCount`, `inputCount`, `outputSize`)
+  - Automatic partial output file unlinking on failure
+  - Sanitized error messages (`"We couldn't merge these PDFs. Please try again."`)
+- Automatic inheritance of atomic state transition protection and orphan cleanup from Phase 3
+- Frontend integration:
+  - `MergeConfig.tsx` enhanced with page sequence numbering, move up/down controls, and remove/add buttons
+  - `ToolWorkspace.tsx` integrated to upload multiple files via `/api/v1/files`, create V1 merge job, poll status, and download via `/api/v1/files/:outputFileId/download`
+- Dedicated automated test suite `backend/tests/phase4_merge.test.ts` (`npm run test:merge`) with 9 test scenarios (100% pass)
+- Full documentation in `docs/04-api/merge-pdf.md`, `docs/05-features/merge-pdf.md`, and `docs/08-testing/merge-pdf.md`
+
+## [Phase 3 - PDF Job / Processing System] - 2026-09-21
+
+### Added
+- Asynchronous Job Processing System with full state machine (`QUEUED`, `PROCESSING`, `COMPLETED`, `FAILED`, `CANCELLED`, `EXPIRED`)
+- Prisma `Job` model with foreign key relations to `User` and output `File`, indexed by `[userId]` and `[status]`
+- Prisma migration `20260921125257_add_job_system`
+- Five REST endpoints under `/api/v1/jobs`:
+  - `POST /api/v1/jobs` (create job & trigger async in-process background dispatch)
+  - `GET /api/v1/jobs` (paginated list with `status` and `tool` filters)
+  - `GET /api/v1/jobs/:jobId` (get single job status, progress, and metrics)
+  - `POST /api/v1/jobs/:jobId/cancel` (cancel in-progress or queued job with automatic orphan output file purging)
+  - `DELETE /api/v1/jobs/:jobId` (delete job from history; blocks deletion of active `QUEUED` or `PROCESSING` jobs)
+- Decoupled PDF processor layer (`backend/src/modules/pdf/processors/compress.processor.ts`) for Compress PDF PoC
+- Atomic state transitions (`PROCESSING` ➔ `COMPLETED`, `QUEUED`/`PROCESSING` ➔ `CANCELLED`) preventing concurrency race conditions
+- Guaranteed orphan cleanup: automatic physical file unlinking and DB record deletion both when a job is cancelled during processing and if any failure occurs during completion transition
+- Scoped `ALLOWED_TOOLS` strictly to `compress-pdf` for Phase 3 (subsequent tools added incrementally in Phase 4)
+- Sanitized error reporting (`PROCESSING_FAILED`) to prevent internal system or path leakage on corrupt files
+- Frontend job client library (`frontend/lib/api/jobs.ts`) with typed CRUD operations
+- Frontend `ToolWorkspace.tsx` integrated with job creation, progress polling, completion download via `/api/v1/files/:outputFileId/download`, and double-submit prevention
+- Automated Phase 3 test suite (`backend/tests/phase3_jobs.test.ts`) covering 12 scenarios with 100% pass rate
+- Comprehensive documentation in `docs/03-architecture/job-processing.md`, `docs/04-api/jobs.md`, `docs/05-features/job-system.md`, and `docs/08-testing/job-system-tests.md`
+
+## [Phase 2 - File Management System] - 2026-09-21
+
+### Added
+- File upload API (`POST /api/v1/files`) with PDF-only MIME and extension validation and 100MB limit
+- File listing (`GET /api/v1/files`) with pagination and status filtering
+- File metadata (`GET /api/v1/files/:id`) with user ownership enforcement
+- Secure download (`GET /api/v1/files/:id/download`) via streaming with Content-Disposition headers
+- File rename (`PATCH /api/v1/files/:id`) with input sanitization and automatic `.pdf` preservation
+- File deletion (`DELETE /api/v1/files/:id`) with disk asset unlinking and DB record deletion
+- User-isolated storage architecture (`backend/uploads/users/{userId}/file_{randomHex}.pdf`)
+- Prisma `File` model and `FileStatus` enum representation
+- Standardized file error codes (`FILE_REQUIRED`, `INVALID_FILE`, `UNSUPPORTED_FORMAT`, `FILE_TOO_LARGE`, `FILE_NOT_FOUND`, `FILE_ACCESS_DENIED`, etc.)
+- Frontend upload integration via `uploadFileToV1` helper in `apiClient.ts` and `ToolWorkspace.tsx`
+- Prisma migration `20260921103652_add_file_management` creating `File` model and indexing `userId`
+- Hardened download path security with `path.relative` directory traversal checks
+- Upload-to-database atomicity: automatic physical file unlink if database insertion fails
+- Controlled validation layer for `FileStatus` enum (`validateFileStatus`) with `INVALID_FILE_STATUS` error code
+- Repository cleanup: removed duplicate DB files and updated `.gitignore` with `*.db`, `*.db-journal`, `*.db-shm`, `*.db-wal`

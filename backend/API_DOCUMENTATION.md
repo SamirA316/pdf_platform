@@ -1,6 +1,29 @@
-# PDF Platform - Authentication API Documentation
+# PDF Platform - API Documentation
 
-Base URL: `http://localhost:3001`
+**Base URL**: `http://localhost:3001`  
+**Authentication**: HTTP-only cookie (`token`) or Strict Bearer token. All browser requests must specify `credentials: 'include'`.
+
+> [!NOTE]
+> ### 🚀 API v1 Modern Endpoints (CURRENT ARCHITECTURE)
+> Complete architectural blueprints, contracts, and flow diagrams are located in the `/docs/04-api/` directory:
+> - **Health Check**: `GET /api/v1/health` (Operational)
+> - **File Management API**: `/api/v1/files` (Phase 2 - Operational ✅) — See [`docs/04-api/files-api.md`](../docs/04-api/files-api.md)
+> - **Job Processing API**: `/api/v1/jobs` (Phase 3 - Operational ✅) — See [`docs/04-api/jobs.md`](../docs/04-api/jobs.md)
+> - **Sequential Modernization Map**: See [`docs/04-api/current-api-map.md`](../docs/04-api/current-api-map.md)
+>
+> | V1 Module | Path | Status | Methods | Description |
+> |---|---|---|---|---|
+> | **Files** | `/api/v1/files` | **OPERATIONAL ✅** | `POST`, `GET`, `PATCH`, `DELETE` | Secure file upload, storage, user isolation, metadata, streaming download |
+> | **Jobs** | `/api/v1/jobs` | **OPERATIONAL ✅** | `POST`, `GET`, `DELETE` | Asynchronous PDF processing state machine (`QUEUED` ➔ `PROCESSING` ➔ `COMPLETED` / `FAILED` / `CANCELLED`) |
+
+> [!WARNING]
+> ### ⚠️ Legacy Endpoints (`/api/auth`, `/api/pdf`, `/api/documents`)
+> The sections documented below represent legacy routes preserved strictly for backward compatibility with existing frontend tools.  
+> These routes will be migrated to `/api/v1` module-by-module (Phase 4: Core PDF Tools migration). Do NOT add new functionality to these legacy endpoints.
+
+---
+
+## Legacy Authentication API Documentation
 
 **Important Note for Frontend Team:** 
 All requests must include `credentials: 'include'` in the fetch/axios configuration. The backend uses HTTP-only cookies (`token`) for secure session management. Without this flag, the session will not persist and subsequent requests to `/me` will fail.
@@ -156,7 +179,7 @@ Upload a PDF file for storage.
 - **Credentials:** `include`
 
 ### Request Body (FormData)
-- `file`: The PDF file to upload (Max 10MB)
+- `file`: The PDF file to upload (Max 100MB)
 
 ### Success Response (201 Created)
 ```json

@@ -11,10 +11,12 @@ router.post("/login", login);
 router.get("/me", requireStrictAuth, me);
 router.post("/logout", logout);
 
-// Check if we are running without real API keys
+// --- DEVELOPMENT ONLY: Mock OAuth Fallback ---
+// Used in Phase 0/local development when real OAuth provider credentials are not configured.
+// Scheduled for complete removal during the Production Hardening Phase.
 const isMock = !process.env.GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID === "PLACEHOLDER_GOOGLE_CLIENT_ID";
 
-// Mock Route
+// Mock Route (DEVELOPMENT ONLY)
 router.get("/mock/:provider", mockOAuthLogin);
 
 // --- OAuth Routes ---

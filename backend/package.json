@@ -6,7 +6,12 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "start": "tsx src/server.ts",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "tsx tests/phase2_files.test.ts",
+    "test:files": "tsx tests/phase2_files.test.ts",
+    "test:jobs": "tsx tests/phase3_jobs.test.ts",
+    "test:merge": "tsx tests/phase4_merge.test.ts",
+    "test:split": "tsx tests/phase4_split.test.ts",
+    "test:rotate": "tsx tests/phase4_rotate.test.ts"
   },
   "keywords": [],
   "author": "",
