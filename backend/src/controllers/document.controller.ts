@@ -34,9 +34,16 @@ export const uploadDocument = async (req: AuthRequest, res: Response): Promise<v
   }
 };
 
+import { GUEST_USER_ID } from "../middlewares/auth.middleware";
+
 export const getDocuments = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.userId as string;
+
+    if (userId === GUEST_USER_ID) {
+      res.status(200).json({ documents: [] });
+      return;
+    }
 
     const documents = await prisma.document.findMany({
       where: { userId },
@@ -100,7 +107,8 @@ export const downloadDocument = async (req: AuthRequest, res: Response): Promise
       return;
     }
 
-    if (document.userId !== userId) {
+    // Allow download if user owns it or if document/user is guest
+    if (document.userId !== userId && document.userId !== GUEST_USER_ID && userId !== GUEST_USER_ID) {
       res.status(403).json({ error: "Unauthorized to access this document" });
       return;
     }
@@ -110,6 +118,7 @@ export const downloadDocument = async (req: AuthRequest, res: Response): Promise
       return;
     }
 
+    res.setHeader("Access-Control-Expose-Headers", "Content-Disposition");
     res.download(document.path, document.originalName);
   } catch (error) {
     console.error("Download document error:", error);

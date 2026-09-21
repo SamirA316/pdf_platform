@@ -2,24 +2,29 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Lock, Eye, EyeOff } from "lucide-react";
+import { Lock, Unlock, Eye, EyeOff } from "lucide-react";
 
 interface ProtectConfigProps {
   files: File[];
   onProcess: (config?: Record<string, unknown>) => void;
+  slug?: string;
 }
 
-export function ProtectConfig({ files, onProcess }: ProtectConfigProps) {
+export function ProtectConfig({ files, onProcess, slug }: ProtectConfigProps) {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+
+  const isUnlock = slug === "unlock-pdf";
 
   return (
     <div className="w-full max-w-xl mx-auto bg-card border border-border rounded-3xl p-8 shadow-sm">
       <div className="text-center mb-8">
-        <div className="inline-flex p-3 bg-primary/10 rounded-full mb-4 text-primary">
-          <Lock className="w-6 h-6" />
+        <div className={`inline-flex p-3 rounded-full mb-4 ${isUnlock ? "bg-amber-500/10 text-amber-600" : "bg-primary/10 text-primary"}`}>
+          {isUnlock ? <Unlock className="w-6 h-6" /> : <Lock className="w-6 h-6" />}
         </div>
-        <h3 className="text-2xl font-bold text-foreground">Secure your PDF</h3>
+        <h3 className="text-2xl font-bold text-foreground">
+          {isUnlock ? "Unlock your PDF" : "Secure your PDF"}
+        </h3>
         <p className="text-muted-foreground mt-2">
           File: <span className="font-medium text-foreground">{files[0]?.name}</span>
         </p>
@@ -27,15 +32,20 @@ export function ProtectConfig({ files, onProcess }: ProtectConfigProps) {
 
       <div className="mb-8">
         <label className="block text-sm font-medium text-foreground mb-2">
-          Set a Password
+          {isUnlock ? "Enter PDF Password" : "Set a Password"}
         </label>
         <div className="relative">
           <input
             type={showPassword ? "text" : "password"}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && password.trim().length > 0) {
+                onProcess({ password });
+              }
+            }}
             className="w-full px-4 py-3 rounded-xl border border-border bg-background text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary pr-12"
-            placeholder="Type your secure password"
+            placeholder={isUnlock ? "Enter current password" : "Type your secure password"}
           />
           <button
             type="button"
@@ -46,19 +56,22 @@ export function ProtectConfig({ files, onProcess }: ProtectConfigProps) {
           </button>
         </div>
         <p className="text-xs text-muted-foreground mt-2">
-          Keep this password safe. You will need it to open the file.
+          {isUnlock 
+            ? "Enter the document password to permanently remove its password protection."
+            : "Keep this password safe. You will need it to open the file."}
         </p>
       </div>
 
       <div className="flex justify-center">
         <Button 
           onClick={() => onProcess({ password })} 
-          className="w-full h-10 rounded-lg font-bold shadow-sm"
-          disabled={!password || password.length < 3}
+          className="w-full h-11 rounded-xl font-bold shadow-sm"
+          disabled={!password || password.trim().length === 0}
         >
-          Protect Document
+          {isUnlock ? "Unlock Document" : "Protect Document"}
         </Button>
       </div>
     </div>
   );
 }
+
