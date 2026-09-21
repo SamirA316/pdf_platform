@@ -292,6 +292,95 @@ export async function validateCreateJob(userId: string, data: ICreateJobDto): Pr
     }
   }
 
+  // 4E. Organize PDF Options & Validation
+  if (normalizedTool === "organize-pdf") {
+    if (fileIds.length !== 1) {
+      throw new InvalidInputFileError("Tool 'organize-pdf' accepts exactly 1 input file.");
+    }
+
+    const file = files[0]!;
+    const uploadBase = path.resolve(process.cwd(), "uploads");
+    const physicalPath = path.resolve(uploadBase, file.storageKey);
+
+    if (!fs.existsSync(physicalPath)) {
+      throw new InvalidInputFileError("Physical input PDF does not exist on disk.");
+    }
+
+    let totalPages = 0;
+    try {
+      const pdfBytes = await fs.promises.readFile(physicalPath);
+      const pdfDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
+      totalPages = pdfDoc.getPageCount();
+    } catch {
+      throw new BadRequestError("Unable to read input PDF document.", "INVALID_PDF");
+    }
+
+    if (totalPages < 1) {
+      throw new BadRequestError("The PDF document contains no pages.", "INVALID_PDF_PAGES");
+    }
+
+    if (!options || !Array.isArray(options.pages) || options.pages.length === 0) {
+      throw new BadRequestError(
+        "At least one page specification is required in 'pages' array.",
+        "INVALID_TOOL_OPTIONS"
+      );
+    }
+
+    if (options.pages.length > 200) {
+      throw new BadRequestError(
+        "Organize PDF cannot produce more than 200 pages at once.",
+        "MAX_OUTPUT_PAGES_EXCEEDED"
+      );
+    }
+
+    const normalizedPages: Array<{ sourcePage: number; rotation: number }> = [];
+
+    for (let i = 0; i < options.pages.length; i++) {
+      const item = options.pages[i];
+      let sourcePage: number;
+      let rot = 0;
+
+      if (typeof item === "number") {
+        sourcePage = item;
+      } else if (item && typeof item === "object") {
+        sourcePage = Number(item.sourcePage);
+        if (item.rotation !== undefined) {
+          rot = Number(item.rotation);
+          if (rot < 0) {
+            rot = ((rot % 360) + 360) % 360;
+          }
+          if (rot % 90 !== 0) {
+            throw new BadRequestError(
+              `Invalid rotation angle '${item.rotation}'. Allowed angles: 0, 90, 180, 270 degrees.`,
+              "INVALID_ROTATION_ANGLE"
+            );
+          }
+          rot = rot % 360;
+        }
+      } else {
+        throw new BadRequestError(`Invalid page specification at index ${i}.`, "INVALID_PAGE");
+      }
+
+      if (!Number.isInteger(sourcePage)) {
+        throw new BadRequestError(`Source page at index ${i} must be an integer.`, "INVALID_PAGE");
+      }
+
+      if (sourcePage < 1 || sourcePage > totalPages) {
+        throw new BadRequestError(
+          `Source page ${sourcePage} is out of bounds (document has ${totalPages} pages).`,
+          "PAGE_OUT_OF_BOUNDS"
+        );
+      }
+
+      normalizedPages.push({
+        sourcePage,
+        rotation: rot,
+      });
+    }
+
+    options.pages = normalizedPages;
+  }
+
   return {
     validatedTool: normalizedTool,
     validatedInputFileIds: fileIds,

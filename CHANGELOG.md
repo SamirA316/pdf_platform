@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Phase 4.4 - Organize PDF Tool] - 2026-09-22
+
+### Added
+- Integrated `organize-pdf` tool into the V1 Job Processing System (`/api/v1/jobs`)
+- Added `"organize-pdf"` to `ALLOWED_TOOLS` in `job.constants.ts`
+- Validation logic for `organize-pdf` in `job.validation.ts`:
+  - Exactly 1 input file required
+  - Strict ownership, `READY` status, and `application/pdf` MIME verification
+  - Non-empty `pages` array validation with maximum 200 pages safeguard (`MAX_OUTPUT_PAGES_EXCEEDED`)
+  - Bounds validation: `1 <= sourcePage <= totalPages` (`PAGE_OUT_OF_BOUNDS`)
+  - Per-page rotation angle validation (`0, 90, 180, 270`)
+- Decoupled `OrganizeProcessor` in `backend/src/modules/pdf/processors/organize.processor.ts`:
+  - Uses `pdf-lib` to copy and arrange pages arbitrarily
+  - Supports arbitrary reordering, extraction/deletion, page duplication, and per-page rotation
+  - Saves with `{ useObjectStreams: false }` for universal viewer compatibility
+  - Automatic partial output file unlinking on processor failure
+- Frontend integration:
+  - Interactive `OrganizeConfig.tsx` with visual thumbnail cards, move left/right, rotate, duplicate, delete, and quick sequence modes
+  - `ToolWorkspace.tsx` integrated with `slug === "organize-pdf"` dispatch and single-file download
+- Comprehensive test suite `backend/tests/phase4_organize.test.ts` (`npm run test:organize`) covering 14 scenarios (100% pass)
+- Complete documentation: `docs/04-api/organize-pdf.md`, `docs/05-features/organize-pdf.md`, `docs/08-testing/organize-pdf.md`
+
 ## [Phase 4.3 - Rotate PDF Tool] - 2026-09-22
 
 ### Added

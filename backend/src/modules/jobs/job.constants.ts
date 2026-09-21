@@ -20,6 +20,7 @@ export const ALLOWED_TOOLS = new Set<string>([
   "merge-pdf",
   "split-pdf",
   "rotate-pdf",
+  "organize-pdf",
 ]);
 
 /**
