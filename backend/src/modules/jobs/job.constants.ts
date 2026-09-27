@@ -16,6 +16,7 @@ export enum JobStatus {
  * Other tools will be added incrementally in Phase 4 as processors are implemented & verified.
  */
 export const ALLOWED_TOOLS = new Set<string>([
+  // Core 12 Tools
   "compress-pdf",
   "merge-pdf",
   "split-pdf",
@@ -23,11 +24,45 @@ export const ALLOWED_TOOLS = new Set<string>([
   "organize-pdf",
   "resize-pdf",
   "watermark-pdf",
+  "watermark",
   "page-numbers",
   "protect-pdf",
   "unlock-pdf",
   "repair-pdf",
   "pdf-to-pdfa",
+
+  // Image & Web Conversions
+  "jpg-to-pdf",
+  "scan-to-pdf",
+  "pdf-to-jpg",
+  "pdf-to-png",
+  "html-to-pdf",
+  "pdf-to-markdown",
+
+  // Office & Document Conversions
+  "word-to-pdf",
+  "excel-to-pdf",
+  "powerpoint-to-pdf",
+  "pdf-to-word",
+  "pdf-to-excel",
+  "pdf-to-powerpoint",
+
+  // Advanced PDF Tools
+  "crop-pdf",
+  "sign-pdf",
+  "redact-pdf",
+  "pdf-forms",
+  "compare-pdf",
+
+  // OCR & Recognition
+  "ocr-pdf",
+  "scan-text",
+
+  // AI Document Suite
+  "ai-summarizer",
+  "translate-pdf",
+  "chat-with-pdf",
+  "edit-pdf",
 ]);
 
 /**

@@ -98,10 +98,27 @@ export async function validateCreateJob(userId: string, data: ICreateJobDto): Pr
         `Input file '${file.originalName}' is not in READY status (current status: ${file.status}).`
       );
     }
-    if (file.mimeType !== "application/pdf") {
-      throw new InvalidInputFileError(
-        `Input file '${file.originalName}' is not a valid PDF document (mimeType: ${file.mimeType}).`
-      );
+    const isImageInput = normalizedTool === "jpg-to-pdf" || normalizedTool === "scan-to-pdf";
+    const isWordInput = normalizedTool === "word-to-pdf";
+    const isExcelInput = normalizedTool === "excel-to-pdf";
+    const isPptInput = normalizedTool === "powerpoint-to-pdf";
+    const isHtmlInput = normalizedTool === "html-to-pdf";
+
+    if (isImageInput) {
+      const allowedImageMimes = new Set(["image/jpeg", "image/png", "image/webp", "image/tiff"]);
+      if (!allowedImageMimes.has(file.mimeType.toLowerCase())) {
+        throw new InvalidInputFileError(
+          `Input file '${file.originalName}' is not a supported image document (mimeType: ${file.mimeType}).`
+        );
+      }
+    } else if (isWordInput || isExcelInput || isPptInput || isHtmlInput) {
+      // Office and web files permitted
+    } else {
+      if (file.mimeType !== "application/pdf") {
+        throw new InvalidInputFileError(
+          `Input file '${file.originalName}' is not a valid PDF document (mimeType: ${file.mimeType}).`
+        );
+      }
     }
   }
 

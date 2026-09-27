@@ -49,9 +49,10 @@ export default function LoginPage() {
       setLoading(true);
       try {
         const data = await loginUser(formData);
+        const authedUser = data.user || (data as any)?.data?.user;
 
-        if (data.user) {
-          dispatch(login(data.user));
+        if (authedUser) {
+          dispatch(login(authedUser));
         }
         router.push("/");
       } catch (err) {

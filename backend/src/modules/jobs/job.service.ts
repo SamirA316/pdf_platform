@@ -14,6 +14,19 @@ import { protectProcessor } from "../pdf/processors/protect.processor";
 import { unlockProcessor } from "../pdf/processors/unlock.processor";
 import { repairProcessor } from "../pdf/processors/repair.processor";
 import { pdfaProcessor } from "../pdf/processors/pdfa.processor";
+import { imageToPdfProcessor } from "../pdf/processors/image-to-pdf.processor";
+import { pdfToImageProcessor } from "../pdf/processors/pdf-to-image.processor";
+import { htmlToPdfProcessor } from "../pdf/processors/html-to-pdf.processor";
+import { pdfToMarkdownProcessor } from "../pdf/processors/pdf-to-markdown.processor";
+import { cropProcessor } from "../pdf/processors/crop.processor";
+import { signProcessor } from "../pdf/processors/sign.processor";
+import { redactProcessor } from "../pdf/processors/redact.processor";
+import { formsProcessor } from "../pdf/processors/forms.processor";
+import { compareProcessor } from "../pdf/processors/compare.processor";
+import { officeToPdfProcessor } from "../pdf/processors/office-to-pdf.processor";
+import { pdfToOfficeProcessor } from "../pdf/processors/pdf-to-office.processor";
+import { ocrProcessor } from "../pdf/processors/ocr.processor";
+import { aiToolsProcessor } from "../pdf/processors/ai-tools.processor";
 import { filesService } from "../files/files.service";
 import {
   JobNotFoundError,
@@ -364,6 +377,143 @@ export class JobService {
         resultOutputFileId = result.outputFileId;
         resultMetrics = result.metrics;
         generatedOutputFileIds.push(result.outputFileId);
+      } else if (tool === "jpg-to-pdf" || tool === "scan-to-pdf") {
+        const result = await imageToPdfProcessor.process({
+          jobId,
+          userId,
+          inputFileIds,
+          options: effectiveOptions,
+        });
+        resultOutputFileId = result.outputFileId;
+        resultMetrics = result.metrics;
+        generatedOutputFileIds.push(result.outputFileId);
+      } else if (tool === "pdf-to-jpg" || tool === "pdf-to-png") {
+        const result = await pdfToImageProcessor.process({
+          jobId,
+          userId,
+          inputFileId: inputFileIds[0]!,
+          options: {
+            ...effectiveOptions,
+            format: tool === "pdf-to-png" ? "png" : (effectiveOptions?.format || "jpg"),
+          },
+        });
+        resultOutputFileId = result.outputFileId;
+        resultMetrics = result.metrics;
+        generatedOutputFileIds.push(result.outputFileId);
+      } else if (tool === "html-to-pdf") {
+        const result = await htmlToPdfProcessor.process({
+          jobId,
+          userId,
+          inputFileId: inputFileIds[0],
+          options: effectiveOptions,
+        });
+        resultOutputFileId = result.outputFileId;
+        resultMetrics = result.metrics;
+        generatedOutputFileIds.push(result.outputFileId);
+      } else if (tool === "pdf-to-markdown") {
+        const result = await pdfToMarkdownProcessor.process({
+          jobId,
+          userId,
+          inputFileId: inputFileIds[0]!,
+          options: effectiveOptions,
+        });
+        resultOutputFileId = result.outputFileId;
+        resultMetrics = result.metrics;
+        generatedOutputFileIds.push(result.outputFileId);
+      } else if (tool === "crop-pdf") {
+        const result = await cropProcessor.process({
+          jobId,
+          userId,
+          inputFileId: inputFileIds[0]!,
+          options: effectiveOptions,
+        });
+        resultOutputFileId = result.outputFileId;
+        resultMetrics = result.metrics;
+        generatedOutputFileIds.push(result.outputFileId);
+      } else if (tool === "sign-pdf") {
+        const result = await signProcessor.process({
+          jobId,
+          userId,
+          inputFileId: inputFileIds[0]!,
+          options: effectiveOptions,
+        });
+        resultOutputFileId = result.outputFileId;
+        resultMetrics = result.metrics;
+        generatedOutputFileIds.push(result.outputFileId);
+      } else if (tool === "redact-pdf") {
+        const result = await redactProcessor.process({
+          jobId,
+          userId,
+          inputFileId: inputFileIds[0]!,
+          options: effectiveOptions,
+        });
+        resultOutputFileId = result.outputFileId;
+        resultMetrics = result.metrics;
+        generatedOutputFileIds.push(result.outputFileId);
+      } else if (tool === "pdf-forms") {
+        const result = await formsProcessor.process({
+          jobId,
+          userId,
+          inputFileId: inputFileIds[0]!,
+          options: effectiveOptions,
+        });
+        resultOutputFileId = result.outputFileId;
+        resultMetrics = result.metrics;
+        generatedOutputFileIds.push(result.outputFileId);
+      } else if (tool === "compare-pdf") {
+        const result = await compareProcessor.process({
+          jobId,
+          userId,
+          inputFileIds,
+          options: effectiveOptions,
+        });
+        resultOutputFileId = result.outputFileId;
+        resultMetrics = result.metrics;
+        generatedOutputFileIds.push(result.outputFileId);
+      } else if (tool === "word-to-pdf" || tool === "excel-to-pdf" || tool === "powerpoint-to-pdf") {
+        const result = await officeToPdfProcessor.process({
+          jobId,
+          userId,
+          inputFileId: inputFileIds[0]!,
+          tool,
+          options: effectiveOptions,
+        });
+        resultOutputFileId = result.outputFileId;
+        resultMetrics = result.metrics;
+        generatedOutputFileIds.push(result.outputFileId);
+      } else if (tool === "pdf-to-word" || tool === "pdf-to-excel" || tool === "pdf-to-powerpoint") {
+        const result = await pdfToOfficeProcessor.process({
+          jobId,
+          userId,
+          inputFileId: inputFileIds[0]!,
+          tool,
+          options: effectiveOptions,
+        });
+        resultOutputFileId = result.outputFileId;
+        resultMetrics = result.metrics;
+        generatedOutputFileIds.push(result.outputFileId);
+      } else if (tool === "ocr-pdf" || tool === "scan-text") {
+        const result = await ocrProcessor.process({
+          jobId,
+          userId,
+          inputFileId: inputFileIds[0]!,
+          tool,
+          options: effectiveOptions,
+        });
+        resultOutputFileId = result.outputFileId;
+        resultMetrics = result.metrics;
+        generatedOutputFileIds.push(result.outputFileId);
+      } else if (tool === "ai-summarizer" || tool === "translate-pdf" || tool === "chat-with-pdf") {
+        const result = await aiToolsProcessor.process({
+          jobId,
+          userId,
+          inputFileId: inputFileIds[0]!,
+          tool,
+          options: effectiveOptions,
+        });
+        resultOutputFileId = result.outputFileId;
+        resultMetrics = result.metrics;
+        generatedOutputFileIds.push(result.outputFileId);
       } else {
         throw new Error(`No processor registered for tool '${tool}'.`);
       }
@@ -399,7 +549,7 @@ export class JobService {
         return;
       }
     } catch (err: any) {
-      logger.error(`PDF job ${jobId} failed.`, "JOB");
+      logger.error(`PDF job ${jobId} failed: ${err?.message}\n${err?.stack}`, "JOB");
 
       // Clean up all generated output files on dispatch failure to prevent orphaned files
       if (generatedOutputFileIds.length > 0) {

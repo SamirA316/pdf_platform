@@ -14,7 +14,7 @@ interface AuthState {
 
 const initialState: AuthState = {
   user: null,
-  isLoading: true, // Start true for initial checkAuth
+  isLoading: true,
 };
 
 export const checkAuth = createAsyncThunk(
@@ -22,8 +22,22 @@ export const checkAuth = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const data = await getMe();
-      return data.user as User;
+      if (data && data.user) {
+        if (typeof window !== "undefined") {
+          localStorage.setItem("pdf_user", JSON.stringify(data.user));
+        }
+        return data.user as User;
+      }
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("pdf_user");
+        localStorage.removeItem("pdf_session_token");
+      }
+      return rejectWithValue("Unauthorized");
     } catch {
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("pdf_user");
+        localStorage.removeItem("pdf_session_token");
+      }
       return rejectWithValue("Unauthorized");
     }
   }
@@ -34,7 +48,15 @@ export const logoutUser = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       await logoutUserApi();
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("pdf_user");
+        localStorage.removeItem("pdf_session_token");
+      }
     } catch {
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("pdf_user");
+        localStorage.removeItem("pdf_session_token");
+      }
       return rejectWithValue("Logout failed");
     }
   }
@@ -46,6 +68,31 @@ const authSlice = createSlice({
   reducers: {
     login: (state, action: PayloadAction<User>) => {
       state.user = action.payload;
+      state.isLoading = false;
+      if (typeof window !== "undefined" && action.payload) {
+        localStorage.setItem("pdf_user", JSON.stringify(action.payload));
+      }
+    },
+    logout: (state) => {
+      state.user = null;
+      state.isLoading = false;
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("pdf_user");
+        localStorage.removeItem("pdf_session_token");
+      }
+    },
+    hydrateFromStorage: (state) => {
+      if (typeof window !== "undefined") {
+        try {
+          const raw = localStorage.getItem("pdf_user");
+          if (raw) {
+            state.user = JSON.parse(raw);
+            state.isLoading = false;
+          }
+        } catch {
+          // ignore
+        }
+      }
     },
     setLoading: (state, action: PayloadAction<boolean>) => {
       state.isLoading = action.payload;
@@ -54,7 +101,9 @@ const authSlice = createSlice({
   extraReducers: (builder) => {
     builder
       .addCase(checkAuth.pending, (state) => {
-        state.isLoading = true;
+        if (!state.user) {
+          state.isLoading = true;
+        }
       })
       .addCase(checkAuth.fulfilled, (state, action) => {
         state.isLoading = false;
@@ -66,9 +115,14 @@ const authSlice = createSlice({
       })
       .addCase(logoutUser.fulfilled, (state) => {
         state.user = null;
+        state.isLoading = false;
+      })
+      .addCase(logoutUser.rejected, (state) => {
+        state.user = null;
+        state.isLoading = false;
       });
   },
 });
 
-export const { login, setLoading } = authSlice.actions;
+export const { login, logout, setLoading, hydrateFromStorage } = authSlice.actions;
 export default authSlice.reducer;
