@@ -46,11 +46,22 @@ export interface AuthResponse {
 }
 
 /**
+ * Helper to unwrap response data if wrapped in { success: true, data: T }
+ */
+function unwrapResponse<T>(res: any): T {
+  if (res && typeof res === "object" && "success" in res && "data" in res) {
+    return res.data as T;
+  }
+  return res as T;
+}
+
+/**
  * Fetch current authenticated user session
  * GET /api/v1/auth/me
  */
 export async function getMe(): Promise<{ user: UserProfile | null }> {
-  return apiClient<{ user: UserProfile | null }>("/api/v1/auth/me");
+  const res = await apiClient<any>("/api/v1/auth/me");
+  return unwrapResponse<{ user: UserProfile | null }>(res);
 }
 
 /**
@@ -58,7 +69,17 @@ export async function getMe(): Promise<{ user: UserProfile | null }> {
  * POST /api/v1/auth/login
  */
 export async function loginUser(payload: LoginPayload): Promise<AuthResponse> {
-  return apiClient<AuthResponse>("/api/v1/auth/login", { data: payload });
+  const res = await apiClient<any>("/api/v1/auth/login", { data: payload });
+  const unwrapped = unwrapResponse<AuthResponse>(res);
+  if (typeof window !== "undefined") {
+    if (unwrapped.token) {
+      localStorage.setItem("pdf_session_token", unwrapped.token);
+    }
+    if (unwrapped.user) {
+      localStorage.setItem("pdf_user", JSON.stringify(unwrapped.user));
+    }
+  }
+  return unwrapped;
 }
 
 /**
@@ -66,7 +87,8 @@ export async function loginUser(payload: LoginPayload): Promise<AuthResponse> {
  * POST /api/v1/auth/register
  */
 export async function registerUser(payload: RegisterPayload): Promise<AuthResponse> {
-  return apiClient<AuthResponse>("/api/v1/auth/register", { data: payload });
+  const res = await apiClient<any>("/api/v1/auth/register", { data: payload });
+  return unwrapResponse<AuthResponse>(res);
 }
 
 /**
@@ -74,7 +96,17 @@ export async function registerUser(payload: RegisterPayload): Promise<AuthRespon
  * POST /api/v1/auth/verify-otp
  */
 export async function verifyUserOtp(payload: VerifyOtpPayload): Promise<AuthResponse> {
-  return apiClient<AuthResponse>("/api/v1/auth/verify-otp", { data: payload });
+  const res = await apiClient<any>("/api/v1/auth/verify-otp", { data: payload });
+  const unwrapped = unwrapResponse<AuthResponse>(res);
+  if (typeof window !== "undefined") {
+    if (unwrapped.token) {
+      localStorage.setItem("pdf_session_token", unwrapped.token);
+    }
+    if (unwrapped.user) {
+      localStorage.setItem("pdf_user", JSON.stringify(unwrapped.user));
+    }
+  }
+  return unwrapped;
 }
 
 /**
@@ -82,7 +114,8 @@ export async function verifyUserOtp(payload: VerifyOtpPayload): Promise<AuthResp
  * POST /api/v1/auth/resend-otp
  */
 export async function resendUserOtp(payload: ResendOtpPayload): Promise<AuthResponse> {
-  return apiClient<AuthResponse>("/api/v1/auth/resend-otp", { data: payload });
+  const res = await apiClient<any>("/api/v1/auth/resend-otp", { data: payload });
+  return unwrapResponse<AuthResponse>(res);
 }
 
 /**
@@ -90,7 +123,8 @@ export async function resendUserOtp(payload: ResendOtpPayload): Promise<AuthResp
  * POST /api/v1/auth/forgot-password
  */
 export async function forgotPassword(payload: ForgotPasswordPayload): Promise<{ message: string }> {
-  return apiClient<{ message: string }>("/api/v1/auth/forgot-password", { data: payload });
+  const res = await apiClient<any>("/api/v1/auth/forgot-password", { data: payload });
+  return unwrapResponse<{ message: string }>(res);
 }
 
 /**
@@ -98,7 +132,8 @@ export async function forgotPassword(payload: ForgotPasswordPayload): Promise<{ 
  * POST /api/v1/auth/reset-password
  */
 export async function resetPassword(payload: ResetPasswordPayload): Promise<{ message: string }> {
-  return apiClient<{ message: string }>("/api/v1/auth/reset-password", { data: payload });
+  const res = await apiClient<any>("/api/v1/auth/reset-password", { data: payload });
+  return unwrapResponse<{ message: string }>(res);
 }
 
 /**
@@ -106,5 +141,10 @@ export async function resetPassword(payload: ResetPasswordPayload): Promise<{ me
  * POST /api/v1/auth/logout
  */
 export async function logoutUser(): Promise<{ message: string }> {
-  return apiClient<{ message: string }>("/api/v1/auth/logout", { method: "POST" });
+  if (typeof window !== "undefined") {
+    localStorage.removeItem("pdf_session_token");
+    localStorage.removeItem("pdf_user");
+  }
+  const res = await apiClient<any>("/api/v1/auth/logout", { method: "POST" });
+  return unwrapResponse<{ message: string }>(res);
 }

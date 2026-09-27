@@ -723,16 +723,53 @@ export function ToolWorkspace({ slug, accept, maxSizeMB, actionType, allowMultip
       }
     }
 
-    // All 12 Core PDF Tools are handled in the V1 Job Architecture blocks above
-    const V1_CORE_TOOLS = new Set([
-      "merge-pdf", "split-pdf", "rotate-pdf", "organize-pdf", "resize-pdf",
-      "watermark", "watermark-pdf", "page-numbers", "protect-pdf", "unlock-pdf",
-      "compress-pdf", "repair-pdf", "pdf-to-pdfa"
-    ]);
+    // Generic V1 Job Architecture Execution for all tools (Conversions, Office, AI, Security, OCR, etc.)
+    try {
+      const filesToProcess = customFile ? [customFile] : files;
+      if (!filesToProcess || filesToProcess.length === 0) {
+        throw new Error("Please select at least one file to process.");
+      }
 
-    if (!V1_CORE_TOOLS.has(slug)) {
+      // Upload all files to V1 storage
+      const uploadedV1Files = await Promise.all(filesToProcess.map((f) => uploadFileToV1(f)));
+      const inputFileIds = uploadedV1Files.map((f) => f.id);
+
+      const job = await createJob({
+        tool: slug,
+        inputFileIds,
+        options: config ? (config as Record<string, any>) : {},
+      });
+
+      // Poll job status until COMPLETED or FAILED
+      let active = true;
+      while (active) {
+        await new Promise((res) => setTimeout(res, 1000));
+        const updatedJob = await getJob(job.id);
+
+        if (updatedJob.status === "COMPLETED") {
+          active = false;
+          setIsV1JobResult(true);
+
+          if (updatedJob.outputFileId) {
+            setResultId(updatedJob.outputFileId);
+          }
+          if (updatedJob.outputFile?.originalName) {
+            setResultFileName(updatedJob.outputFile.originalName);
+          } else {
+            setResultFileName(`processed_${slug}.pdf`);
+          }
+
+          setFlowState("result");
+          return;
+        } else if (updatedJob.status === "FAILED" || updatedJob.status === "CANCELLED") {
+          active = false;
+          throw new Error(updatedJob.errorMessage || `Failed to process document with ${title}.`);
+        }
+      }
+    } catch (err: any) {
+      console.error(`Job processing error for ${slug}:`, err);
       setProcessError({
-        message: `The tool "${slug}" is scheduled for an upcoming release. Please use one of our 12 Core PDF Tools.`,
+        message: err?.message || `Failed to process document with ${title}.`,
         isAuth: false,
       });
       setFlowState("error");

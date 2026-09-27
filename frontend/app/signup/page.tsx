@@ -123,9 +123,10 @@ export default function SignupPage() {
     setLoading(true);
     try {
       const data = await verifyUserOtp({ email: registeredEmail, otp });
+      const authedUser = data.user || (data as any)?.data?.user;
 
-      if (data.user) {
-        dispatch(login(data.user));
+      if (authedUser) {
+        dispatch(login(authedUser));
       }
       router.push("/");
     } catch (err) {

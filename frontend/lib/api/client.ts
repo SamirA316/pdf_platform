@@ -103,6 +103,22 @@ export async function apiClient<T = any>(
     }
   }
 
+  // Attach session token in Authorization header as bulletproof backup to cookies
+  if (typeof window !== "undefined") {
+    const sessionToken = localStorage.getItem("pdf_session_token");
+    if (sessionToken) {
+      if (config.headers instanceof Headers) {
+        if (!config.headers.has("Authorization")) {
+          config.headers.set("Authorization", `Bearer ${sessionToken}`);
+        }
+      } else {
+        if (!(config.headers as Record<string, string>)["Authorization"]) {
+          (config.headers as Record<string, string>)["Authorization"] = `Bearer ${sessionToken}`;
+        }
+      }
+    }
+  }
+
   const url = `${API_BASE_URL}${endpoint}`;
 
   try {
