@@ -3,10 +3,13 @@ import fs from "fs";
 import crypto from "crypto";
 import { PDFDocument } from "pdf-lib";
 import { prisma } from "../../../common/prisma";
+import { filesService } from "../../files/files.service";
+import { storageService } from "../../files/storage.service";
 import {
   ProcessingFailedError,
   FileNotFoundError,
 } from "../../../common/errors/AppError";
+import { logger } from "../../../common/logger";
 import { STANDARD_PAGE_DIMENSIONS } from "../../jobs/job.constants";
 
 export interface IResizeJobParams {
@@ -68,7 +71,7 @@ export class ResizeProcessor {
     }
 
     // 2. Resolve safe physical path
-    const uploadBase = path.resolve(process.cwd(), "uploads");
+    const uploadBase = storageService.getStorageRoot();
     const physicalPath = path.resolve(uploadBase, dbFile.storageKey);
     const relativePath = path.relative(uploadBase, physicalPath);
 
@@ -116,10 +119,7 @@ export class ResizeProcessor {
     }
 
     // 4. Prepare user output directory
-    const userDir = path.join(uploadBase, "users", userId);
-    if (!fs.existsSync(userDir)) {
-      fs.mkdirSync(userDir, { recursive: true });
-    }
+    const userDir = storageService.getUserStorageDir(userId);
 
     const randomHex = crypto.randomBytes(8).toString("hex");
     const outputFilename = `file_${randomHex}.pdf`;
@@ -127,8 +127,9 @@ export class ResizeProcessor {
     const storageKey = `users/${userId}/${outputFilename}`;
 
     try {
-      console.log(
-        `[JOB] Processing ${jobId}: Resizing file '${dbFile.originalName}' to ${size.toUpperCase()} (${orientation}) [${Math.round(targetWidth)}x${Math.round(targetHeight)} pt]`
+      logger.info(
+        `[JOB] Processing ${jobId}: Resizing file '${dbFile.originalName}' to ${size.toUpperCase()} (${orientation}) [${Math.round(targetWidth)}x${Math.round(targetHeight)} pt]`,
+        "JOB"
       );
 
       const inputBytes = await fs.promises.readFile(physicalPath);
@@ -168,24 +169,22 @@ export class ResizeProcessor {
 
       const outputStats = fs.statSync(physicalOutputPath);
 
-      // Create output File record in Prisma
+      // Create output File record in Prisma with atomic quota enforcement
       const baseNameWithoutExt = dbFile.originalName.replace(/\.pdf$/i, "");
       const outputOriginalName = `${baseNameWithoutExt}_resized_${size}.pdf`;
 
-      const newFile = await prisma.file.create({
-        data: {
-          userId,
-          storageKey,
-          originalName: outputOriginalName,
-          mimeType: "application/pdf",
-          size: outputStats.size,
-          status: "READY",
-          jobId,
-        },
-      });
+      const newFile = await filesService.createFile(
+        userId,
+        outputOriginalName,
+        storageKey,
+        "application/pdf",
+        outputStats.size,
+        jobId
+      );
 
-      console.log(
-        `[JOB] Completed ${jobId}: Resized PDF saved as '${outputOriginalName}' (${outputStats.size} bytes)`
+      logger.info(
+        `[JOB] Completed ${jobId}: Resized PDF saved as '${outputOriginalName}' (${outputStats.size} bytes)`,
+        "JOB"
       );
 
       return {
@@ -204,9 +203,13 @@ export class ResizeProcessor {
       if (fs.existsSync(physicalOutputPath)) {
         try {
           await fs.promises.unlink(physicalOutputPath);
-        } catch (cleanupErr: any) {
-          console.warn(`[JOB] Failed to unlink temp output '${physicalOutputPath}':`, cleanupErr.message);
+        } catch {
+          logger.warn("[JOB] Failed to unlink temporary output file.", "JOB");
         }
+      }
+
+      if (err.code === "STORAGE_QUOTA_EXCEEDED" || err.code === "PAYLOAD_TOO_LARGE") {
+        throw err;
       }
 
       throw new ProcessingFailedError(err.message || "Failed to resize PDF document.");

@@ -13,13 +13,23 @@ model User {
   email      String     @unique
   password   String
   isVerified Boolean    @default(false)
-  otp        String?
-  otpExpires DateTime?
-  documents  Document[]
-  files      File[]
-  jobs       Job[]
-  createdAt  DateTime   @default(now())
-  updatedAt  DateTime   @updatedAt
+  isActive   Boolean    @default(true)
+  otp                  String?
+  otpExpires           DateTime?
+  otpAttempts          Int        @default(0)
+  otpLastSentAt        DateTime?
+  resetPasswordToken   String?
+  resetPasswordExpires DateTime?
+  resetPasswordAttempts Int       @default(0)
+  sessions             Session[]
+  emailChangeRequests  EmailChangeRequest[]
+  securityEvents       SecurityEvent[]
+  documents            Document[]
+  files                File[]
+  jobs                 Job[]
+  storageQuota         StorageQuota?
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
 }
 
 model Document {
@@ -66,11 +76,12 @@ model Job {
   status       String    @default("QUEUED") // QUEUED | PROCESSING | COMPLETED | FAILED | CANCELLED | EXPIRED
   progress     Int       @default(0)
 
-  inputFileIds String    // JSON array of input File IDs: e.g. '["file_123"]'
-  outputFileId String?   // Retained single output reference for backwards compatibility
-  options      String?   // JSON string of tool options: e.g. '{"level":"recommended"}'
+  inputFileIds  String    // JSON array of input File IDs: e.g. '["file_123"]'
+  outputFileId  String?   // Retained single output reference for backwards compatibility
+  options       String?   // JSON string of tool options: e.g. '{"level":"recommended"}'
+  secretOptions String?   // AES-256-GCM encrypted JSON string for passwords/secrets
 
-  errorCode    String?   // Machine readable error code (e.g. PROCESSING_FAILED)
+  errorCode     String?   // Machine readable error code (e.g. PROCESSING_FAILED)
   errorMessage String?   // Sanitized user facing message
 
   startedAt    DateTime?
@@ -87,3 +98,59 @@ model Job {
   @@index([userId])
   @@index([status])
 }
+
+model Session {
+  id         String    @id @default(cuid())
+  userId     String
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model EmailChangeRequest {
+  id         String    @id @default(cuid())
+  userId     String
+  newEmail   String
+  otpHash    String
+  expiresAt  DateTime
+  attempts   Int       @default(0)
+  verifiedAt DateTime?
+  createdAt  DateTime  @default(now())
+  lastSentAt DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([newEmail])
+}
+
+model SecurityEvent {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([type])
+}
+
+model StorageQuota {
+  id         String   @id @default(cuid())
+  userId     String   @unique
+  quotaBytes Int      @default(104857600) // 100MB
+  usedBytes  Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+

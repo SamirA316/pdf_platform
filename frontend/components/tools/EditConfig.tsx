@@ -914,27 +914,8 @@ export function EditConfig({ files, onProcess, slug }: EditConfigProps) {
       );
       if (!cropDataUrl) return;
 
-      const res = await apiClient("/api/pdf/ocr-crop", {
-        data: { image: cropDataUrl },
-      });
-
-      if (res && typeof res.text === "string" && res.text.trim().length > 0) {
-        const fixedText = sanitizeOcrText(res.text.trim());
-        takeSnapshot();
-        setTextList(prev =>
-          prev.map(t =>
-            t.id === item.id
-              ? {
-                  ...t,
-                  originalText: fixedText,
-                  currentText: fixedText,
-                  whiteoutOriginal: false,
-                  isScrambled: false,
-                }
-              : t
-          )
-        );
-      }
+      // Note: OCR text reconstruction is scheduled for the upcoming V1 AI module (/api/v1/jobs)
+      console.info("OCR text reconstruction will be available via /api/v1/jobs in the upcoming AI release.");
     } catch (err) {
       console.warn("Auto-fix OCR warning:", err);
     } finally {
@@ -949,6 +930,7 @@ export function EditConfig({ files, onProcess, slug }: EditConfigProps) {
   const drawCanvasRef = useRef<HTMLCanvasElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const renderTaskRef = useRef<any>(null);
+  const [canvasWidth, setCanvasWidth] = useState<number>(1000);
 
   // Save snapshot to Undo Stack
   const takeSnapshot = useCallback(() => {
@@ -1284,6 +1266,7 @@ export function EditConfig({ files, onProcess, slug }: EditConfigProps) {
         pdfCanvas.height = Math.floor(renderViewport.height);
         pdfCanvas.style.width = `${Math.floor(viewport.width)}px`;
         pdfCanvas.style.height = `${Math.floor(viewport.height)}px`;
+        setCanvasWidth(Math.floor(viewport.width));
 
         drawCanvas.width = Math.floor(renderViewport.width);
         drawCanvas.height = Math.floor(renderViewport.height);
@@ -3155,7 +3138,7 @@ export function EditConfig({ files, onProcess, slug }: EditConfigProps) {
                 const currLen = (item.currentText || "").trim().length;
                 const charRatio = origLen > 0 ? (currLen / origLen) : 1;
 
-                const canvasW = pdfCanvasRef.current ? (parseFloat(pdfCanvasRef.current.style.width) || pdfCanvasRef.current.width) : 1000;
+                const canvasW = canvasWidth || 1000;
                 const maxAllowedW = Math.max(itemWidthPx, canvasW - item.x - 15);
 
                 const boxWidthPx = isSelected

@@ -2,14 +2,13 @@ process.env.NODE_ENV = "test";
 import fs from "fs";
 import path from "path";
 import http from "http";
-import jwt from "jsonwebtoken";
+import { sessionService } from "../src/modules/auth/session.service";
 import { PDFDocument as CantooPDF, rgb, StandardFonts } from "@cantoo/pdf-lib";
 import { prisma } from "../src/common/prisma";
 import { app } from "../src/server";
 
 let BASE_URL = "http://localhost:3001";
 let serverInstance: http.Server | null = null;
-const JWT_SECRET = process.env.JWT_SECRET || "super-secret-jwt-key-replace-in-production";
 
 const userA = { id: "user_a_pdfa_phase4", name: "User A (PDFA)", email: "user_a_pdfa@test.local" };
 const userB = { id: "user_b_pdfa_phase4", name: "User B (PDFA)", email: "user_b_pdfa@test.local" };
@@ -55,8 +54,10 @@ async function ensureTestUsers() {
     }
     u.id = user.id;
   }
-  tokenA = jwt.sign({ id: userA.id, email: userA.email }, JWT_SECRET, { expiresIn: "1h" });
-  tokenB = jwt.sign({ id: userB.id, email: userB.email }, JWT_SECRET, { expiresIn: "1h" });
+  const sA = await sessionService.createSession(userA.id);
+  tokenA = sA.rawToken;
+  const sB = await sessionService.createSession(userB.id);
+  tokenB = sB.rawToken;
 }
 
 async function generateSamplePdf(pageCount: number, label: string): Promise<Buffer> {
@@ -300,10 +301,17 @@ async function runTests() {
     if (!content.includes("GTS_PDFA1") && !content.includes("OutputIntent")) {
       throw new Error("Missing OutputIntent in PDF/A-1b output");
     }
+
+    // Verify independent deep AST validator
+    const { pdfaProcessor } = await import("../src/modules/pdf/processors/pdfa.processor");
+    const valResult = await pdfaProcessor.validatePdfaOutput(physicalPath, "PDF/A-1b");
+    if (!valResult.valid) {
+      throw new Error(`PDF/A-1b output failed deep AST validation: ${valResult.reason}`);
+    }
   });
 
   // TEST 7: Convert to PDF/A-2b (ISO 19005-2 Level B)
-  await test("Test 7: Convert to PDF/A-2b and verify compliance metadata", async () => {
+  await test("Test 7: Convert to PDF/A-2b, verify compliance metadata and embedded ICC profile", async () => {
     const res = await fetch(`${BASE_URL}/api/v1/jobs`, {
       method: "POST",
       headers: {
@@ -339,10 +347,17 @@ async function runTests() {
     if (!content.includes("<pdfaid:conformance>B</pdfaid:conformance>")) {
       throw new Error("Missing <pdfaid:conformance>B</pdfaid:conformance> in output");
     }
+
+    // Verify independent deep AST validator
+    const { pdfaProcessor } = await import("../src/modules/pdf/processors/pdfa.processor");
+    const valResult = await pdfaProcessor.validatePdfaOutput(physicalPath, "PDF/A-2b");
+    if (!valResult.valid) {
+      throw new Error(`PDF/A-2b output failed deep AST validation: ${valResult.reason}`);
+    }
   });
 
   // TEST 8: Convert to PDF/A-3b (ISO 19005-3 Level B)
-  await test("Test 8: Convert to PDF/A-3b and verify compliance metadata", async () => {
+  await test("Test 8: Convert to PDF/A-3b and verify compliance metadata and ICC profile", async () => {
     const res = await fetch(`${BASE_URL}/api/v1/jobs`, {
       method: "POST",
       headers: {
@@ -377,6 +392,12 @@ async function runTests() {
     }
     if (!content.includes("<pdfaid:conformance>B</pdfaid:conformance>")) {
       throw new Error("Missing <pdfaid:conformance>B</pdfaid:conformance> in output");
+    }
+
+    const { pdfaProcessor } = await import("../src/modules/pdf/processors/pdfa.processor");
+    const valResult = await pdfaProcessor.validatePdfaOutput(physicalPath, "PDF/A-3b");
+    if (!valResult.valid) {
+      throw new Error(`PDF/A-3b output failed deep AST validation: ${valResult.reason}`);
     }
   });
 
@@ -418,6 +439,33 @@ async function runTests() {
     }
   });
 
+  // TEST 10: Independent PDF/A validator rejects tampered non-compliant files
+  await test("Test 10: Independent PDF/A validator strictly rejects non-compliant documents", async () => {
+    const { pdfaProcessor } = await import("../src/modules/pdf/processors/pdfa.processor");
+
+    // Case 1: Plain non-PDF/A standard PDF
+    const plainPdfBytes = await generateSamplePdf(1, "Plain Non-PDFA");
+    const plainPath = path.resolve(process.cwd(), "uploads", "test_plain_temp.pdf");
+    await fs.promises.writeFile(plainPath, plainPdfBytes);
+
+    const checkPlain = await pdfaProcessor.validatePdfaOutput(plainPath, "PDF/A-2b");
+    await fs.promises.unlink(plainPath);
+    if (checkPlain.valid) {
+      throw new Error("Validator incorrectly passed a plain non-PDF/A document!");
+    }
+
+    // Case 2: Encrypted PDF (strictly prohibited by ISO 19005)
+    const encryptedBytes = await generateEncryptedPdf();
+    const encPath = path.resolve(process.cwd(), "uploads", "test_enc_temp.pdf");
+    await fs.promises.writeFile(encPath, encryptedBytes);
+
+    const checkEnc = await pdfaProcessor.validatePdfaOutput(encPath, "PDF/A-2b");
+    await fs.promises.unlink(encPath);
+    if (checkEnc.valid) {
+      throw new Error("Validator incorrectly passed an encrypted document!");
+    }
+  });
+
   console.log(`\nResults: ${passed}/${total} passed`);
   if (serverInstance) {
     serverInstance.close();
@@ -425,6 +473,7 @@ async function runTests() {
   if (passed !== total) {
     process.exit(1);
   }
+  process.exit(0);
 }
 
 runTests().catch((err) => {

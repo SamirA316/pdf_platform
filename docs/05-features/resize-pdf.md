@@ -63,3 +63,17 @@ Frontend polls job -> Downloads resized PDF
 - **Path Traversal Protection**: Upload directory is resolved safely; relative traversals outside the base directory are strictly forbidden.
 - **Atomic State Transitions**: Cancellation during processing cleans up physical output and does not leave orphaned files.
 - **Fail-Safe Cleanup**: Unlink output files on any failure before throwing sanitized user-facing errors.
+
+---
+
+## 5. Content Scaling Behavior & Known Limitations
+
+### Proportional Vector & Raster Scaling
+- Page visual content streams (text, vector graphics, embedded images) are scaled proportionally using `scaleContent(scale, scale)` and centered using `translateContent(xOffset, yOffset)`.
+- This ensures no distortion, stretching, or content clipping occurs across any target aspect ratio.
+
+### Interactive Annotations & AcroForms Limitation
+> [!NOTE]
+> - **Interactive Form Fields & Annotations**: In the current Phase 4 implementation, visual page streams are centered and scaled. Complex interactive annotations (such as interactive AcroForm text fields, radio buttons, and digital signature widgets) retain their absolute coordinate definitions in the page annotation array.
+> - **Recommendation**: For standard reading documents, contracts, reports, and scanned PDFs, Resize operates with 100% visual fidelity. Documents requiring specialized interactive form-widget repositioning are scheduled for advanced annotation matrix remapping in Phase 5.
+

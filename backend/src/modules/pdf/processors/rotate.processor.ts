@@ -3,10 +3,13 @@ import fs from "fs";
 import crypto from "crypto";
 import { PDFDocument, degrees } from "pdf-lib";
 import { prisma } from "../../../common/prisma";
+import { filesService } from "../../files/files.service";
+import { storageService } from "../../files/storage.service";
 import {
   ProcessingFailedError,
   FileNotFoundError,
 } from "../../../common/errors/AppError";
+import { logger } from "../../../common/logger";
 
 export interface IRotateJobParams {
   jobId: string;
@@ -55,7 +58,7 @@ export class RotateProcessor {
     }
 
     // 2. Resolve safe physical path
-    const uploadBase = path.resolve(process.cwd(), "uploads");
+    const uploadBase = storageService.getStorageRoot();
     const physicalPath = path.resolve(uploadBase, dbFile.storageKey);
     const relativePath = path.relative(uploadBase, physicalPath);
 
@@ -68,10 +71,7 @@ export class RotateProcessor {
     }
 
     // 3. Prepare user output directory
-    const userDir = path.join(uploadBase, "users", userId);
-    if (!fs.existsSync(userDir)) {
-      fs.mkdirSync(userDir, { recursive: true });
-    }
+    const userDir = storageService.getUserStorageDir(userId);
 
     const randomHex = crypto.randomBytes(8).toString("hex");
     const outputFilename = `file_${randomHex}.pdf`;
@@ -79,7 +79,7 @@ export class RotateProcessor {
     const storageKey = `users/${userId}/${outputFilename}`;
 
     try {
-      console.log(`[JOB] Processing ${jobId}: Rotating file '${dbFile.originalName}'`);
+      logger.info(`[JOB] Processing ${jobId}: Rotating file '${dbFile.originalName}'`, "JOB");
 
       const inputBytes = await fs.promises.readFile(physicalPath);
       const pdfDoc = await PDFDocument.load(inputBytes, { ignoreEncryption: true });
@@ -132,21 +132,19 @@ export class RotateProcessor {
       const outputName = `${baseName}_rotated.pdf`;
       const outputSize = Buffer.byteLength(rotatedPdfBytes);
 
-      // Record output File in database
-      const outputFile = await prisma.file.create({
-        data: {
-          userId,
-          originalName: outputName,
-          storageKey,
-          mimeType: "application/pdf",
-          size: outputSize,
-          status: "READY",
-          jobId,
-        },
-      });
+      // Record output File in database with atomic quota enforcement
+      const outputFile = await filesService.createFile(
+        userId,
+        outputName,
+        storageKey,
+        "application/pdf",
+        outputSize,
+        jobId
+      );
 
-      console.log(
-        `[JOB] Completed ${jobId}: Created rotated output file ${outputFile.id} (${rotatedPagesCount}/${totalPages} pages rotated, ${outputSize} bytes)`
+      logger.info(
+        `[JOB] Completed ${jobId}: Created rotated output file ${outputFile.id} (${rotatedPagesCount}/${totalPages} pages rotated, ${outputSize} bytes)`,
+        "JOB"
       );
 
       return {
@@ -158,15 +156,19 @@ export class RotateProcessor {
         },
       };
     } catch (err: any) {
-      console.error(`[JOB] Failed ${jobId}:`, err.message || err);
+      logger.error(`PDF job ${jobId} failed.`, "JOB");
 
       // Clean up orphaned partial output file on disk
       if (fs.existsSync(physicalOutputPath)) {
         try {
           await fs.promises.unlink(physicalOutputPath);
-        } catch (unlinkErr) {
-          console.warn("Failed to clean up partial rotated output file:", unlinkErr);
+        } catch {
+          logger.warn("[JOB] Failed to clean up partial rotated output file.", "JOB");
         }
+      }
+
+      if (err.code === "STORAGE_QUOTA_EXCEEDED" || err.code === "PAYLOAD_TOO_LARGE") {
+        throw err;
       }
 
       throw new ProcessingFailedError("We couldn't rotate this PDF. Please try again.");

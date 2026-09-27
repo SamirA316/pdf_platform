@@ -3,10 +3,13 @@ import fs from "fs";
 import crypto from "crypto";
 import { PDFDocument, rgb, StandardFonts, RGB } from "pdf-lib";
 import { prisma } from "../../../common/prisma";
+import { filesService } from "../../files/files.service";
+import { storageService } from "../../files/storage.service";
 import {
   ProcessingFailedError,
   FileNotFoundError,
 } from "../../../common/errors/AppError";
+import { logger } from "../../../common/logger";
 
 export interface IPageNumbersJobParams {
   jobId: string;
@@ -84,7 +87,7 @@ export class PageNumbersProcessor {
     }
 
     // 2. Resolve safe physical path
-    const uploadBase = path.resolve(process.cwd(), "uploads");
+    const uploadBase = storageService.getStorageRoot();
     const physicalPath = path.resolve(uploadBase, dbFile.storageKey);
     const relativePath = path.relative(uploadBase, physicalPath);
 
@@ -97,10 +100,7 @@ export class PageNumbersProcessor {
     }
 
     // 3. Prepare user output directory
-    const userDir = path.join(uploadBase, "users", userId);
-    if (!fs.existsSync(userDir)) {
-      fs.mkdirSync(userDir, { recursive: true });
-    }
+    const userDir = storageService.getUserStorageDir(userId);
 
     const randomHex = crypto.randomBytes(8).toString("hex");
     const outputFilename = `file_${randomHex}.pdf`;
@@ -108,8 +108,9 @@ export class PageNumbersProcessor {
     const storageKey = `users/${userId}/${outputFilename}`;
 
     try {
-      console.log(
-        `[JOB] Processing ${jobId}: Adding page numbers to '${dbFile.originalName}' (pos: ${position}, start: ${startNumber}, format: "${format}")`
+      logger.info(
+        `[JOB] Processing ${jobId}: Adding page numbers to '${dbFile.originalName}' (pos: ${position}, start: ${startNumber}, format: "${format}")`,
+        "JOB"
       );
 
       const inputBytes = await fs.promises.readFile(physicalPath);
@@ -196,24 +197,22 @@ export class PageNumbersProcessor {
 
       const outputStats = fs.statSync(physicalOutputPath);
 
-      // Create output File record in Prisma
+      // Create output File record in Prisma with atomic quota enforcement
       const baseNameWithoutExt = dbFile.originalName.replace(/\.pdf$/i, "");
       const outputOriginalName = `${baseNameWithoutExt}_numbered.pdf`;
 
-      const newFile = await prisma.file.create({
-        data: {
-          userId,
-          storageKey,
-          originalName: outputOriginalName,
-          mimeType: "application/pdf",
-          size: outputStats.size,
-          status: "READY",
-          jobId,
-        },
-      });
+      const newFile = await filesService.createFile(
+        userId,
+        outputOriginalName,
+        storageKey,
+        "application/pdf",
+        outputStats.size,
+        jobId
+      );
 
-      console.log(
-        `[JOB] Completed ${jobId}: Page numbers added as '${outputOriginalName}' (${outputStats.size} bytes)`
+      logger.info(
+        `[JOB] Completed ${jobId}: Page numbers added as '${outputOriginalName}' (${outputStats.size} bytes)`,
+        "JOB"
       );
 
       return {
@@ -232,9 +231,13 @@ export class PageNumbersProcessor {
       if (fs.existsSync(physicalOutputPath)) {
         try {
           await fs.promises.unlink(physicalOutputPath);
-        } catch (cleanupErr: any) {
-          console.warn(`[JOB] Failed to unlink temp output '${physicalOutputPath}':`, cleanupErr.message);
+        } catch {
+          logger.warn("[JOB] Failed to unlink temporary output file.", "JOB");
         }
+      }
+
+      if (err.code === "STORAGE_QUOTA_EXCEEDED" || err.code === "PAYLOAD_TOO_LARGE") {
+        throw err;
       }
 
       throw new ProcessingFailedError(err.message || "Failed to add page numbers to PDF document.");

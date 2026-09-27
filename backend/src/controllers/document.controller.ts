@@ -1,10 +1,34 @@
 import { Request, Response } from "express";
-import { PrismaClient } from "@prisma/client";
 import path from "path";
 import fs from "fs";
-import { AuthRequest } from "./auth.controller";
+import { AuthRequest } from "../middlewares/auth.middleware";
+import { prisma } from "../common/prisma";
+import { storageService } from "../modules/files/storage.service";
+import { logger } from "../common/logger";
 
-const prisma = new PrismaClient();
+import { GUEST_USER_ID } from "../middlewares/auth.middleware";
+
+export interface IPublicDocumentDto {
+  id: string;
+  filename: string;
+  originalName: string;
+  size: number;
+  type: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export function toPublicDocument(document: any): IPublicDocumentDto {
+  return {
+    id: document.id,
+    filename: document.filename,
+    originalName: document.originalName,
+    size: document.size,
+    type: document.type,
+    createdAt: document.createdAt,
+    updatedAt: document.updatedAt,
+  };
+}
 
 export const uploadDocument = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -27,14 +51,15 @@ export const uploadDocument = async (req: AuthRequest, res: Response): Promise<v
       },
     });
 
-    res.status(201).json({ message: "File uploaded successfully", document });
+    res.status(201).json({
+      message: "File uploaded successfully",
+      document: toPublicDocument(document),
+    });
   } catch (error) {
-    console.error("Upload error:", error);
+    logger.error("Upload error", "HTTP");
     res.status(500).json({ error: "Internal server error" });
   }
 };
-
-import { GUEST_USER_ID } from "../middlewares/auth.middleware";
 
 export const getDocuments = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -50,9 +75,37 @@ export const getDocuments = async (req: AuthRequest, res: Response): Promise<voi
       orderBy: { createdAt: "desc" },
     });
 
-    res.status(200).json({ documents });
+    res.status(200).json({
+      documents: documents.map(toPublicDocument),
+    });
   } catch (error) {
-    console.error("Get documents error:", error);
+    logger.error("Get documents error", "HTTP");
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+export const getDocumentById = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.userId as string;
+    const documentId = req.params.id as string;
+
+    const document = await prisma.document.findFirst({
+      where: {
+        id: documentId,
+        userId: userId,
+      },
+    });
+
+    if (!document) {
+      res.status(404).json({ error: "Document not found" });
+      return;
+    }
+
+    res.status(200).json({
+      document: toPublicDocument(document),
+    });
+  } catch (error) {
+    logger.error("Get document error", "HTTP");
     res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -62,8 +115,11 @@ export const deleteDocument = async (req: AuthRequest, res: Response): Promise<v
     const userId = req.userId as string;
     const documentId = req.params.id as string;
 
-    const document = await prisma.document.findUnique({
-      where: { id: documentId },
+    const document = await prisma.document.findFirst({
+      where: {
+        id: documentId,
+        userId: userId,
+      },
     });
 
     if (!document) {
@@ -71,14 +127,24 @@ export const deleteDocument = async (req: AuthRequest, res: Response): Promise<v
       return;
     }
 
-    if (document.userId !== userId) {
-      res.status(403).json({ error: "Unauthorized to delete this document" });
-      return;
-    }
+    // Safely delete physical file ensuring it resides within uploads directory
+    const uploadBase = storageService.getStorageRoot();
+    const physicalPath = path.isAbsolute(document.path)
+      ? path.resolve(document.path)
+      : path.resolve(uploadBase, document.path);
 
-    // Delete physical file
-    if (fs.existsSync(document.path)) {
-      fs.unlinkSync(document.path);
+    const relativeToUpload = path.relative(uploadBase, physicalPath);
+    const isSafe =
+      !relativeToUpload.startsWith("..") &&
+      !path.isAbsolute(relativeToUpload) &&
+      physicalPath.startsWith(uploadBase + path.sep);
+
+    if (isSafe && fs.existsSync(physicalPath)) {
+      try {
+        fs.unlinkSync(physicalPath);
+      } catch {
+        logger.warn("Failed to unlink document file.", "STORAGE");
+      }
     }
 
     // Delete database record
@@ -88,7 +154,7 @@ export const deleteDocument = async (req: AuthRequest, res: Response): Promise<v
 
     res.status(200).json({ message: "Document deleted successfully" });
   } catch (error) {
-    console.error("Delete document error:", error);
+    logger.error("Delete document error", "HTTP");
     res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -98,8 +164,11 @@ export const downloadDocument = async (req: AuthRequest, res: Response): Promise
     const userId = req.userId as string;
     const documentId = req.params.id as string;
 
-    const document = await prisma.document.findUnique({
-      where: { id: documentId },
+    const document = await prisma.document.findFirst({
+      where: {
+        id: documentId,
+        userId: userId,
+      },
     });
 
     if (!document) {
@@ -107,21 +176,26 @@ export const downloadDocument = async (req: AuthRequest, res: Response): Promise
       return;
     }
 
-    // Allow download if user owns it or if document/user is guest
-    if (document.userId !== userId && document.userId !== GUEST_USER_ID && userId !== GUEST_USER_ID) {
-      res.status(403).json({ error: "Unauthorized to access this document" });
-      return;
-    }
+    const uploadBase = storageService.getStorageRoot();
+    const physicalPath = path.isAbsolute(document.path)
+      ? path.resolve(document.path)
+      : path.resolve(uploadBase, document.path);
 
-    if (!fs.existsSync(document.path)) {
-      res.status(404).json({ error: "Physical file not found on server" });
+    const relativeToUpload = path.relative(uploadBase, physicalPath);
+    const isSafe =
+      !relativeToUpload.startsWith("..") &&
+      !path.isAbsolute(relativeToUpload) &&
+      physicalPath.startsWith(uploadBase + path.sep);
+
+    if (!isSafe || !fs.existsSync(physicalPath)) {
+      res.status(404).json({ error: "Document not found" });
       return;
     }
 
     res.setHeader("Access-Control-Expose-Headers", "Content-Disposition");
-    res.download(document.path, document.originalName);
+    res.download(physicalPath, document.originalName);
   } catch (error) {
-    console.error("Download document error:", error);
+    logger.error("Download document error", "HTTP");
     res.status(500).json({ error: "Internal server error" });
   }
 };

@@ -3,10 +3,13 @@ import fs from "fs";
 import crypto from "crypto";
 import { PDFDocument, degrees } from "pdf-lib";
 import { prisma } from "../../../common/prisma";
+import { filesService } from "../../files/files.service";
+import { storageService } from "../../files/storage.service";
 import {
   ProcessingFailedError,
   FileNotFoundError,
 } from "../../../common/errors/AppError";
+import { logger } from "../../../common/logger";
 
 export interface IOrganizeJobParams {
   jobId: string;
@@ -59,7 +62,7 @@ export class OrganizeProcessor {
     }
 
     // 2. Resolve safe physical path
-    const uploadBase = path.resolve(process.cwd(), "uploads");
+    const uploadBase = storageService.getStorageRoot();
     const physicalPath = path.resolve(uploadBase, dbFile.storageKey);
     const relativePath = path.relative(uploadBase, physicalPath);
 
@@ -72,10 +75,7 @@ export class OrganizeProcessor {
     }
 
     // 3. Prepare user output directory
-    const userDir = path.join(uploadBase, "users", userId);
-    if (!fs.existsSync(userDir)) {
-      fs.mkdirSync(userDir, { recursive: true });
-    }
+    const userDir = storageService.getUserStorageDir(userId);
 
     const randomHex = crypto.randomBytes(8).toString("hex");
     const outputFilename = `file_${randomHex}.pdf`;
@@ -83,8 +83,9 @@ export class OrganizeProcessor {
     const storageKey = `users/${userId}/${outputFilename}`;
 
     try {
-      console.log(
-        `[JOB] Processing ${jobId}: Organizing file '${dbFile.originalName}' (${pages.length} target pages)`
+      logger.info(
+        `[JOB] Processing ${jobId}: Organizing file '${dbFile.originalName}' (${pages.length} target pages)`,
+        "JOB"
       );
 
       const inputBytes = await fs.promises.readFile(physicalPath);
@@ -125,21 +126,19 @@ export class OrganizeProcessor {
       const outputName = `${baseName}_organized.pdf`;
       const outputSize = Buffer.byteLength(organizedPdfBytes);
 
-      // Record output File in database
-      const outputFile = await prisma.file.create({
-        data: {
-          userId,
-          originalName: outputName,
-          storageKey,
-          mimeType: "application/pdf",
-          size: outputSize,
-          status: "READY",
-          jobId,
-        },
-      });
+      // Record output File in database with atomic quota enforcement
+      const outputFile = await filesService.createFile(
+        userId,
+        outputName,
+        storageKey,
+        "application/pdf",
+        outputSize,
+        jobId
+      );
 
-      console.log(
-        `[JOB] Completed ${jobId}: Created organized output file ${outputFile.id} (${pages.length} pages, ${outputSize} bytes)`
+      logger.info(
+        `[JOB] Completed ${jobId}: Created organized output file ${outputFile.id} (${pages.length} pages, ${outputSize} bytes)`,
+        "JOB"
       );
 
       return {
@@ -151,15 +150,19 @@ export class OrganizeProcessor {
         },
       };
     } catch (err: any) {
-      console.error(`[JOB] Failed ${jobId}:`, err.message || err);
+      logger.error(`PDF job ${jobId} failed.`, "JOB");
 
       // Clean up orphaned partial output file on disk
       if (fs.existsSync(physicalOutputPath)) {
         try {
           await fs.promises.unlink(physicalOutputPath);
-        } catch (unlinkErr) {
-          console.warn("Failed to clean up partial organized output file:", unlinkErr);
+        } catch {
+          logger.warn("[JOB] Failed to clean up partial organized output file.", "JOB");
         }
+      }
+
+      if (err.code === "STORAGE_QUOTA_EXCEEDED" || err.code === "PAYLOAD_TOO_LARGE") {
+        throw err;
       }
 
       throw new ProcessingFailedError("We couldn't organize this PDF. Please try again.");

@@ -36,3 +36,18 @@ Frontend Polls -> Displays ResultCard with Download Action
 - **Strict Ownership**: Only the file owner can encrypt their documents.
 - **Physical Path Traversal Guard**: Resolved paths are strictly verified against `uploads/`.
 - **Atomic Cleanup**: Any partial file outputs are safely unlinked if the job fails or is cancelled.
+
+---
+
+## 5. Cryptographic Profile & Verification
+- **Cipher**: AES-256 (Advanced Encryption Standard with 256-bit symmetric key)
+- **Standard**: ISO 32000-1 / Adobe Extension Level 8
+- **Dictionary Attributes**:
+  - `Filter`: `/Standard`
+  - `V`: `5` (Version 5 security handler specifying 256-bit AES algorithms)
+  - `R`: `6` (Revision 6 cipher specification)
+  - `Length`: `256`
+  - `CryptFilter`: `/AESV3`
+- **Key Derivation**: Iterative hashing with SHA-256, SHA-384, and SHA-512 incorporating random 32-byte initialization vectors.
+- **Automated Proof**: Formally asserted in test suite `tests/phase4_protect_unlock.test.ts` (Test 7b).
+

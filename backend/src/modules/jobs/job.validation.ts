@@ -2,6 +2,7 @@ import path from "path";
 import fs from "fs";
 import { PDFDocument } from "pdf-lib";
 import { prisma } from "../../common/prisma";
+import { storageService } from "../files/storage.service";
 import {
   ALLOWED_TOOLS,
   ALLOWED_COMPRESS_LEVELS,
@@ -129,7 +130,7 @@ export async function validateCreateJob(userId: string, data: ICreateJobDto): Pr
 
     // Resolve physical file to verify page count against ranges / pages
     const inputFile = files[0]!;
-    const uploadBase = path.resolve(process.cwd(), "uploads");
+    const uploadBase = storageService.getStorageRoot();
     const physicalPath = path.resolve(uploadBase, inputFile.storageKey);
     if (!fs.existsSync(physicalPath)) {
       throw new InvalidInputFileError("Physical input PDF does not exist on disk.");
@@ -230,7 +231,7 @@ export async function validateCreateJob(userId: string, data: ICreateJobDto): Pr
     }
 
     const file = files[0]!;
-    const uploadBase = path.resolve(process.cwd(), "uploads");
+    const uploadBase = storageService.getStorageRoot();
     const physicalPath = path.resolve(uploadBase, file.storageKey);
 
     if (!fs.existsSync(physicalPath)) {
@@ -319,7 +320,7 @@ export async function validateCreateJob(userId: string, data: ICreateJobDto): Pr
     }
 
     const file = files[0]!;
-    const uploadBase = path.resolve(process.cwd(), "uploads");
+    const uploadBase = storageService.getStorageRoot();
     const physicalPath = path.resolve(uploadBase, file.storageKey);
 
     if (!fs.existsSync(physicalPath)) {
@@ -408,7 +409,7 @@ export async function validateCreateJob(userId: string, data: ICreateJobDto): Pr
     }
 
     const file = files[0]!;
-    const uploadBase = path.resolve(process.cwd(), "uploads");
+    const uploadBase = storageService.getStorageRoot();
     const physicalPath = path.resolve(uploadBase, file.storageKey);
 
     if (!fs.existsSync(physicalPath)) {
@@ -547,7 +548,7 @@ export async function validateCreateJob(userId: string, data: ICreateJobDto): Pr
     }
 
     const file = files[0]!;
-    const uploadBase = path.resolve(process.cwd(), "uploads");
+    const uploadBase = storageService.getStorageRoot();
     const physicalPath = path.resolve(uploadBase, file.storageKey);
 
     if (!fs.existsSync(physicalPath)) {
@@ -687,7 +688,7 @@ export async function validateCreateJob(userId: string, data: ICreateJobDto): Pr
     }
 
     const file = files[0]!;
-    const uploadBase = path.resolve(process.cwd(), "uploads");
+    const uploadBase = storageService.getStorageRoot();
     const physicalPath = path.resolve(uploadBase, file.storageKey);
 
     if (!fs.existsSync(physicalPath)) {
@@ -780,7 +781,7 @@ export async function validateCreateJob(userId: string, data: ICreateJobDto): Pr
     }
 
     const file = files[0]!;
-    const uploadBase = path.resolve(process.cwd(), "uploads");
+    const uploadBase = storageService.getStorageRoot();
     const physicalPath = path.resolve(uploadBase, file.storageKey);
 
     if (!fs.existsSync(physicalPath)) {
@@ -800,7 +801,12 @@ export async function validateCreateJob(userId: string, data: ICreateJobDto): Pr
       throw new BadRequestError("The PDF document contains no pages.", "INVALID_PDF_PAGES");
     }
 
-    const userPassword = typeof options.userPassword === "string" ? options.userPassword : "";
+    const userPassword =
+      typeof options.userPassword === "string" && options.userPassword.trim()
+        ? options.userPassword.trim()
+        : typeof options.password === "string" && options.password.trim()
+        ? options.password.trim()
+        : "";
     if (!userPassword) {
       throw new BadRequestError("A non-empty 'userPassword' is required to protect the PDF.", "INVALID_PASSWORD");
     }
@@ -825,7 +831,7 @@ export async function validateCreateJob(userId: string, data: ICreateJobDto): Pr
     }
 
     const file = files[0]!;
-    const uploadBase = path.resolve(process.cwd(), "uploads");
+    const uploadBase = storageService.getStorageRoot();
     const physicalPath = path.resolve(uploadBase, file.storageKey);
 
     if (!fs.existsSync(physicalPath)) {
@@ -847,7 +853,7 @@ export async function validateCreateJob(userId: string, data: ICreateJobDto): Pr
     }
 
     const file = files[0]!;
-    const uploadBase = path.resolve(process.cwd(), "uploads");
+    const uploadBase = storageService.getStorageRoot();
     const physicalPath = path.resolve(uploadBase, file.storageKey);
 
     if (!fs.existsSync(physicalPath)) {
@@ -867,7 +873,7 @@ export async function validateCreateJob(userId: string, data: ICreateJobDto): Pr
     }
 
     const file = files[0]!;
-    const uploadBase = path.resolve(process.cwd(), "uploads");
+    const uploadBase = storageService.getStorageRoot();
     const physicalPath = path.resolve(uploadBase, file.storageKey);
 
     if (!fs.existsSync(physicalPath)) {

@@ -1,21 +1,23 @@
 import { Request, Response } from "express";
-import { PrismaClient } from "@prisma/client";
 import { PDFDocument, degrees, rgb, StandardFonts, PageSizes } from "@cantoo/pdf-lib";
 import path from "path";
 import fs from "fs";
-import { AuthRequest } from "./auth.controller";
+import { AuthRequest } from "../middlewares/auth.middleware";
 import { exec } from "child_process";
 import util from "util";
 import OpenAI from "openai";
 import puppeteer from "puppeteer";
 import sharp from "sharp";
 import { compressPDFFile } from "../utils/pdfCompressor";
+import { prisma } from "../common/prisma";
+import { toPublicDocument } from "./document.controller";
+import { storageService } from "../modules/files/storage.service";
+import { logger } from "../common/logger";
 
 const pdfParse = require("pdf-parse");
 const execPromise = util.promisify(exec);
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" });
-const prisma = new PrismaClient();
-const uploadDir = path.join(process.cwd(), "uploads");
+const uploadDir = storageService.getStorageRoot();
 
 
 export const protectPDF = async (req: AuthRequest, res: Response): Promise<void> => {
@@ -63,9 +65,9 @@ export const protectPDF = async (req: AuthRequest, res: Response): Promise<void>
     });
 
     if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
-    res.status(201).json({ message: "PDF protected successfully", document });
+    res.status(201).json({ message: "PDF protected successfully", document: toPublicDocument(document) });
   } catch (error) {
-    console.error("Protect PDF error:", error);
+    logger.error("Protect PDF error", "LEGACY_PDF");
     if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
     res.status(500).json({ error: (error as Error).message || "Failed to protect PDF" });
   }
@@ -124,9 +126,9 @@ export const unlockPDF = async (req: AuthRequest, res: Response): Promise<void> 
     });
 
     if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
-    res.status(201).json({ message: "PDF unlocked successfully", document });
+    res.status(201).json({ message: "PDF unlocked successfully", document: toPublicDocument(document) });
   } catch (error) {
-    console.error("Unlock PDF error:", error);
+    logger.error("Unlock PDF error", "LEGACY_PDF");
     if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
     res.status(500).json({ error: (error as Error).message || "Failed to unlock PDF" });
   }
@@ -171,7 +173,7 @@ export const compressPDF = async (req: AuthRequest, res: Response): Promise<void
       imagesCompressed: stats.imagesCompressed,
     });
   } catch (error) {
-    console.error("Compress PDF error:", error);
+    logger.error("Compress PDF error", "LEGACY_PDF");
     if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
     res.status(500).json({ error: (error as Error).message || "Internal server error" });
   }
@@ -219,9 +221,9 @@ export const aiSummarize = async (req: AuthRequest, res: Response): Promise<void
     });
 
     fs.unlinkSync(file.path);
-    res.status(201).json({ message: "PDF summarized successfully", document });
+    res.status(201).json({ message: "PDF summarized successfully", document: toPublicDocument(document) });
   } catch (error) {
-    console.error("AI Summarize error:", error);
+    logger.error("AI Summarize error", "LEGACY_PDF");
     if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
     res.status(500).json({ error: "Internal server error" });
   }
@@ -269,9 +271,9 @@ export const aiTranslate = async (req: AuthRequest, res: Response): Promise<void
     });
 
     fs.unlinkSync(file.path);
-    res.status(201).json({ message: "PDF translated successfully", document });
+    res.status(201).json({ message: "PDF translated successfully", document: toPublicDocument(document) });
   } catch (error) {
-    console.error("AI Translate error:", error);
+    logger.error("AI Translate error", "LEGACY_PDF");
     if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
     res.status(500).json({ error: "Internal server error" });
   }
@@ -320,9 +322,9 @@ export const chatWithPdf = async (req: AuthRequest, res: Response): Promise<void
     });
 
     fs.unlinkSync(file.path);
-    res.status(201).json({ message: "Chat processed successfully", document });
+    res.status(201).json({ message: "Chat processed successfully", document: toPublicDocument(document) });
   } catch (error) {
-    console.error("Chat with PDF error:", error);
+    logger.error("Chat with PDF error", "LEGACY_PDF");
     if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
     res.status(500).json({ error: "Internal server error" });
   }
@@ -390,7 +392,7 @@ export const convertToPdf = async (req: AuthRequest, res: Response): Promise<voi
           await browser.close();
           converted = true;
         } catch (docxErr) {
-          console.error("DOCX conversion fallback error:", docxErr);
+          logger.warn("DOCX conversion fallback error", "LEGACY_PDF");
         }
       } else if (ext === ".xlsx" || ext === ".xls" || ext === ".csv") {
         try {
@@ -419,7 +421,7 @@ export const convertToPdf = async (req: AuthRequest, res: Response): Promise<voi
           await browser.close();
           converted = true;
         } catch (xlsxErr) {
-          console.error("XLSX conversion fallback error:", xlsxErr);
+          logger.warn("XLSX conversion fallback error", "LEGACY_PDF");
         }
       }
     }
@@ -451,9 +453,9 @@ export const convertToPdf = async (req: AuthRequest, res: Response): Promise<voi
     });
 
     if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
-    res.status(201).json({ message: "Converted to PDF successfully", document });
+    res.status(201).json({ message: "Converted to PDF successfully", document: toPublicDocument(document) });
   } catch (error) {
-    console.error("Convert to PDF error:", error);
+    logger.error("Convert to PDF error", "LEGACY_PDF");
     if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
     res.status(500).json({ error: (error as Error).message || "Internal server error" });
   }
@@ -566,12 +568,12 @@ export const pdfToImage = async (req: AuthRequest, res: Response): Promise<void>
 
     res.status(201).json({
       message: `PDF converted to ${totalPages} ${ext.toUpperCase()} image${totalPages > 1 ? "s" : ""} successfully`,
-      document: createdDocuments[0],
-      documents: createdDocuments,
+      document: createdDocuments[0] ? toPublicDocument(createdDocuments[0]) : null,
+      documents: createdDocuments.map(toPublicDocument),
       totalPages,
     });
   } catch (error) {
-    console.error("PDF to Image error:", error);
+    logger.error("PDF to Image error", "LEGACY_PDF");
     if (browser) await browser.close().catch(() => {});
     if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
     res.status(500).json({ error: (error as Error).message || "Failed to convert PDF to images" });
@@ -594,7 +596,7 @@ export const repairPdf = async (req: AuthRequest, res: Response): Promise<void> 
     try {
       await execPromise(`gs -o "${newPath}" -sDEVICE=pdfwrite -dPDFSETTINGS=/prepress "${file.path}"`);
     } catch (gsErr) {
-      console.warn("Ghostscript not available, repairing via pdf-lib");
+      logger.warn("Ghostscript not available, repairing via pdf-lib", "LEGACY_PDF");
       const pdfBytes = fs.readFileSync(file.path);
       const pdfDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
       const newPdfBytes = await pdfDoc.save();
@@ -606,9 +608,9 @@ export const repairPdf = async (req: AuthRequest, res: Response): Promise<void> 
     });
 
     fs.unlinkSync(file.path);
-    res.status(201).json({ message: "PDF repaired successfully", document });
+    res.status(201).json({ message: "PDF repaired successfully", document: toPublicDocument(document) });
   } catch (error) {
-    console.error("Repair PDF error:", error);
+    logger.error("Repair PDF error", "LEGACY_PDF");
     res.status(500).json({ error: (error as Error).message || "Internal server error" });
   }
 };
@@ -629,7 +631,7 @@ export const pdfToPdfA = async (req: AuthRequest, res: Response): Promise<void> 
     try {
       await execPromise(`gs -dPDFA=1 -sDEVICE=pdfwrite -sColorConversionStrategy=UseDeviceIndependentColor -sOutputFile="${newPath}" "${file.path}"`);
     } catch (gsErr) {
-      console.warn("Ghostscript not available, converting to PDF/A fallback via pdf-lib");
+      logger.warn("Ghostscript not available, converting to PDF/A fallback via pdf-lib", "LEGACY_PDF");
       const pdfBytes = fs.readFileSync(file.path);
       const pdfDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
       pdfDoc.setTitle(file.originalname);
@@ -643,9 +645,9 @@ export const pdfToPdfA = async (req: AuthRequest, res: Response): Promise<void> 
     });
 
     fs.unlinkSync(file.path);
-    res.status(201).json({ message: "Converted to PDF/A successfully", document });
+    res.status(201).json({ message: "Converted to PDF/A successfully", document: toPublicDocument(document) });
   } catch (error) {
-    console.error("PDF/A conversion error:", error);
+    logger.error("PDF/A conversion error", "LEGACY_PDF");
     res.status(500).json({ error: (error as Error).message || "Internal server error" });
   }
 };
@@ -683,7 +685,7 @@ export const pdfToMarkdown = async (req: AuthRequest, res: Response): Promise<vo
     });
 
     fs.unlinkSync(file.path);
-    res.status(201).json({ message: "Converted to Markdown successfully", document });
+    res.status(201).json({ message: "Converted to Markdown successfully", document: toPublicDocument(document) });
   } catch (error) {
     res.status(500).json({ error: "Internal server error" });
   }
@@ -755,9 +757,9 @@ export const htmlToPdf = async (req: AuthRequest, res: Response): Promise<void> 
       },
     });
 
-    res.status(201).json({ message: "HTML converted to PDF successfully", document });
+    res.status(201).json({ message: "HTML converted to PDF successfully", document: toPublicDocument(document) });
   } catch (error) {
-    console.error("HTML to PDF error:", error);
+    logger.error("HTML to PDF error", "LEGACY_PDF");
     if (browser) await browser.close().catch(() => {});
     if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
     res.status(500).json({ error: (error as Error).message || "Failed to convert HTML to PDF" });
@@ -785,7 +787,7 @@ export const ocrPdf = async (req: AuthRequest, res: Response): Promise<void> => 
       await execPromise(`tesseract "${tempTiff}" "${outBase}" pdf`);
       if (fs.existsSync(tempTiff)) fs.unlinkSync(tempTiff);
     } catch (ocrErr) {
-      console.warn("Tesseract CLI not available, producing verified searchable PDF fallback");
+      logger.warn("Tesseract CLI not available, producing verified searchable PDF fallback", "LEGACY_PDF");
       const pdfBytes = fs.readFileSync(file.path);
       const pdfDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
       pdfDoc.setProducer("PDF Platform OCR Engine");
@@ -799,9 +801,9 @@ export const ocrPdf = async (req: AuthRequest, res: Response): Promise<void> => 
     });
 
     if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
-    res.status(201).json({ message: "OCR processed successfully", document });
+    res.status(201).json({ message: "OCR processed successfully", document: toPublicDocument(document) });
   } catch (error) {
-    console.error("OCR PDF error:", error);
+    logger.error("OCR PDF error", "LEGACY_PDF");
     if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
     res.status(500).json({ error: (error as Error).message || "Internal server error" });
   }
@@ -868,7 +870,7 @@ export const ocrCrop = async (req: Request, res: Response): Promise<void> => {
     const text = sanitizeOcrText(rawText);
     res.json({ text, rawText });
   } catch (err: any) {
-    console.error("ocrCrop error:", err);
+    logger.error("ocrCrop error", "LEGACY_PDF");
     res.status(500).json({ error: err.message || "OCR crop failed" });
   }
 };
@@ -902,7 +904,7 @@ export const pdfToOffice = async (req: AuthRequest, res: Response): Promise<void
     });
 
     fs.unlinkSync(file.path);
-    res.status(201).json({ message: `Converted to ${ext} successfully`, document });
+    res.status(201).json({ message: `Converted to ${ext} successfully`, document: toPublicDocument(document) });
   } catch (error) {
     res.status(500).json({ error: "Internal server error" });
   }
@@ -931,7 +933,7 @@ export const advancedUiProcessor = async (req: AuthRequest, res: Response): Prom
     });
 
     fs.unlinkSync(file.path);
-    res.status(201).json({ message: `${slug} processed successfully`, document });
+    res.status(201).json({ message: `${slug} processed successfully`, document: toPublicDocument(document) });
   } catch (error) {
     res.status(500).json({ error: "Internal server error" });
   }
@@ -985,9 +987,9 @@ export const mergePDFs = async (req: AuthRequest, res: Response): Promise<void> 
       fs.unlinkSync(file.path);
     }
 
-    res.status(201).json({ message: "PDFs merged successfully", document });
+    res.status(201).json({ message: "PDFs merged successfully", document: toPublicDocument(document) });
   } catch (error) {
-    console.error("Merge PDF error:", error);
+    logger.error("Merge PDF error", "LEGACY_PDF");
     res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -1056,9 +1058,9 @@ export const splitPDF = async (req: AuthRequest, res: Response): Promise<void> =
     // Delete the original uploaded file used for splitting
     fs.unlinkSync(file.path);
 
-    res.status(201).json({ message: "PDF split successfully", document });
+    res.status(201).json({ message: "PDF split successfully", document: toPublicDocument(document) });
   } catch (error) {
-    console.error("Split PDF error:", error);
+    logger.error("Split PDF error", "LEGACY_PDF");
     res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -1105,9 +1107,9 @@ export const rotatePDF = async (req: AuthRequest, res: Response): Promise<void> 
     });
 
     fs.unlinkSync(file.path);
-    res.status(201).json({ message: "PDF rotated successfully", document });
+    res.status(201).json({ message: "PDF rotated successfully", document: toPublicDocument(document) });
   } catch (error) {
-    console.error("Rotate PDF error:", error);
+    logger.error("Rotate PDF error", "LEGACY_PDF");
     res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -1176,9 +1178,9 @@ export const organizePDF = async (req: AuthRequest, res: Response): Promise<void
     });
 
     fs.unlinkSync(file.path);
-    res.status(201).json({ message: "PDF organized successfully", document });
+    res.status(201).json({ message: "PDF organized successfully", document: toPublicDocument(document) });
   } catch (error) {
-    console.error("Organize PDF error:", error);
+    logger.error("Organize PDF error", "LEGACY_PDF");
     res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -1241,9 +1243,9 @@ export const watermarkPDF = async (req: AuthRequest, res: Response): Promise<voi
     });
 
     fs.unlinkSync(file.path);
-    res.status(201).json({ message: "PDF watermarked successfully", document });
+    res.status(201).json({ message: "PDF watermarked successfully", document: toPublicDocument(document) });
   } catch (error) {
-    console.error("Watermark PDF error:", error);
+    logger.error("Watermark PDF error", "LEGACY_PDF");
     res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -1298,9 +1300,9 @@ export const pageNumbersPDF = async (req: AuthRequest, res: Response): Promise<v
     });
 
     fs.unlinkSync(file.path);
-    res.status(201).json({ message: "Page numbers added successfully", document });
+    res.status(201).json({ message: "Page numbers added successfully", document: toPublicDocument(document) });
   } catch (error) {
-    console.error("Page Numbers PDF error:", error);
+    logger.error("Page Numbers PDF error", "LEGACY_PDF");
     res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -1341,8 +1343,8 @@ export const imageToPDF = async (req: AuthRequest, res: Response): Promise<void>
           width: imgW,
           height: imgH,
         });
-      } catch (imgErr) {
-        console.warn(`Failed to embed image ${file.originalname}:`, imgErr);
+      } catch {
+        logger.warn("Failed to embed image during conversion.", "PDF_CONVERT");
       } finally {
         if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
       }
@@ -1372,9 +1374,9 @@ export const imageToPDF = async (req: AuthRequest, res: Response): Promise<void>
       },
     });
 
-    res.status(201).json({ message: "Images converted to PDF successfully", document });
+    res.status(201).json({ message: "Images converted to PDF successfully", document: toPublicDocument(document) });
   } catch (error) {
-    console.error("Image to PDF error:", error);
+    logger.error("Image to PDF error", "LEGACY_PDF");
     res.status(500).json({ error: (error as Error).message || "Failed to convert images to PDF" });
   }
 };
@@ -1424,9 +1426,9 @@ export const resizePDF = async (req: AuthRequest, res: Response): Promise<void> 
     });
 
     fs.unlinkSync(file.path);
-    res.status(201).json({ message: "PDF resized successfully", document });
+    res.status(201).json({ message: "PDF resized successfully", document: toPublicDocument(document) });
   } catch (error) {
-    console.error("Resize PDF error:", error);
+    logger.error("Resize PDF error", "LEGACY_PDF");
     res.status(500).json({ error: "Internal server error" });
   }
 };

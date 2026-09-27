@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
-import { apiClient } from "@/lib/apiClient";
+import { getMe, logoutUser as logoutUserApi } from "@/lib/api/auth";
 
 export interface User {
   id: string;
@@ -21,9 +21,9 @@ export const checkAuth = createAsyncThunk(
   "auth/checkAuth",
   async (_, { rejectWithValue }) => {
     try {
-      const data = await apiClient("/api/auth/me");
+      const data = await getMe();
       return data.user as User;
-    } catch (error) {
+    } catch {
       return rejectWithValue("Unauthorized");
     }
   }
@@ -33,8 +33,8 @@ export const logoutUser = createAsyncThunk(
   "auth/logoutUser",
   async (_, { rejectWithValue }) => {
     try {
-      await apiClient("/api/auth/logout", { method: "POST" });
-    } catch (error) {
+      await logoutUserApi();
+    } catch {
       return rejectWithValue("Logout failed");
     }
   }

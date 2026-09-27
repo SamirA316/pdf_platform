@@ -2,11 +2,14 @@ import path from "path";
 import fs from "fs";
 import crypto from "crypto";
 import { prisma } from "../../../common/prisma";
+import { filesService } from "../../files/files.service";
+import { storageService } from "../../files/storage.service";
 import { compressPDFFile } from "../../../utils/pdfCompressor";
 import {
   ProcessingFailedError,
   FileNotFoundError,
 } from "../../../common/errors/AppError";
+import { logger } from "../../../common/logger";
 
 export interface ICompressJobParams {
   jobId: string;
@@ -44,7 +47,7 @@ export class CompressProcessor {
       throw new FileNotFoundError("Input file not found for processing.");
     }
 
-    const uploadBase = path.resolve(process.cwd(), "uploads");
+    const uploadBase = storageService.getStorageRoot();
     const physicalInputPath = path.resolve(uploadBase, inputFile.storageKey);
     const relativeInput = path.relative(uploadBase, physicalInputPath);
 
@@ -57,10 +60,7 @@ export class CompressProcessor {
     }
 
     // 2. Prepare user output directory
-    const userDir = path.join(uploadBase, "users", userId);
-    if (!fs.existsSync(userDir)) {
-      fs.mkdirSync(userDir, { recursive: true });
-    }
+    const userDir = storageService.getUserStorageDir(userId);
 
     const randomHex = crypto.randomBytes(8).toString("hex");
     const outputFilename = `file_${randomHex}.pdf`;
@@ -68,7 +68,7 @@ export class CompressProcessor {
     const storageKey = `users/${userId}/${outputFilename}`;
 
     try {
-      console.log(`[JOB] Processing ${jobId}: Compressing file ${inputFile.originalName}`);
+      logger.info(`[JOB] Processing ${jobId}: Compressing file ${inputFile.originalName}`, "JOB");
 
       // 3. Execute compression pipeline
       const level = typeof options?.level === "string" ? options.level : "recommended";
@@ -82,23 +82,21 @@ export class CompressProcessor {
         throw new Error("Compression resulted in an empty or missing output file.");
       }
 
-      // 4. Record new output File in database
+      // 4. Record new output File in database with atomic quota enforcement
       const outputName = inputFile.originalName.toLowerCase().endsWith(".pdf")
         ? inputFile.originalName.replace(/\.pdf$/i, "_compressed.pdf")
         : `${inputFile.originalName}_compressed.pdf`;
 
-      const outputFile = await prisma.file.create({
-        data: {
-          userId,
-          originalName: outputName,
-          storageKey,
-          mimeType: "application/pdf",
-          size: result.compressedSize,
-          status: "READY",
-        },
-      });
+      const outputFile = await filesService.createFile(
+        userId,
+        outputName,
+        storageKey,
+        "application/pdf",
+        result.compressedSize,
+        jobId
+      );
 
-      console.log(`[JOB] Completed ${jobId}: Created output file ${outputFile.id}`);
+      logger.info(`[JOB] Completed ${jobId}: Created output file ${outputFile.id}`, "JOB");
 
       return {
         outputFileId: outputFile.id,
@@ -110,15 +108,19 @@ export class CompressProcessor {
         },
       };
     } catch (err: any) {
-      console.error(`[JOB] Failed ${jobId}:`, err.message || err);
+      logger.error(`PDF job ${jobId} failed.`, "JOB");
 
       // Clean up orphaned partial output file on disk
       if (fs.existsSync(physicalOutputPath)) {
         try {
           await fs.promises.unlink(physicalOutputPath);
-        } catch (unlinkErr) {
-          console.warn("Failed to clean up partial output file:", unlinkErr);
+        } catch {
+          logger.warn("[JOB] Failed to clean up partial output file.", "JOB");
         }
+      }
+
+      if (err.code === "STORAGE_QUOTA_EXCEEDED" || err.code === "PAYLOAD_TOO_LARGE") {
+        throw err;
       }
 
       throw new ProcessingFailedError("We couldn't process this PDF. Please try another file.");

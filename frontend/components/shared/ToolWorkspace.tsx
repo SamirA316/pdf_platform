@@ -34,7 +34,6 @@ interface ToolWorkspaceProps {
 export function ToolWorkspace({ slug, accept, maxSizeMB, actionType, allowMultiple, title }: ToolWorkspaceProps) {
   const [flowState, setFlowState] = useState<FlowState>("upload");
   const [files, setFiles] = useState<File[]>([]);
-  const [v1FileId, setV1FileId] = useState<string | null>(null);
   const [resultId, setResultId] = useState<string | null>(null);
   const [resultFileName, setResultFileName] = useState<string | null>(null);
   const [resultDocuments, setResultDocuments] = useState<Array<{ id: string; originalName: string; size?: number; filename?: string }> | null>(null);
@@ -49,10 +48,11 @@ export function ToolWorkspace({ slug, accept, maxSizeMB, actionType, allowMultip
     if (newFiles && newFiles.length > 0) {
       const fileArray = Array.from(newFiles);
       
-      // Enforce file size limit (100MB)
-      const hasOversized = fileArray.some(f => f.size > maxSizeMB * 1024 * 1024);
+      // Enforce file size limit (50MB default, aligned with backend MAX_FILE_SIZE_BYTES)
+      const effectiveMaxMB = Number(process.env.NEXT_PUBLIC_MAX_FILE_SIZE_MB || maxSizeMB || 50);
+      const hasOversized = fileArray.some(f => f.size > effectiveMaxMB * 1024 * 1024);
       if (hasOversized) {
-        setProcessError({ message: "FILE_TOO_LARGE: File exceeds the allowed size of 100MB." });
+        setProcessError({ message: `FILE_TOO_LARGE: File exceeds the allowed size of ${effectiveMaxMB}MB.` });
         setFlowState("error");
         return;
       }
@@ -66,22 +66,6 @@ export function ToolWorkspace({ slug, accept, maxSizeMB, actionType, allowMultip
         return;
       }
 
-      // Pre-upload single PDF to POST /api/v1/files only for single-file tools like compress-pdf.
-      // For multi-file tools like merge-pdf, files are uploaded on process in their final user-selected sequence.
-      if (slug === "compress-pdf" && fileArray[0]?.name.toLowerCase().endsWith(".pdf")) {
-        try {
-          const v1File = await uploadFileToV1(fileArray[0]);
-          setV1FileId(v1File.id);
-        } catch (err: any) {
-          console.warn("V1 file upload notice:", err);
-          if (err.code === "FILE_TOO_LARGE" || err.code === "UNSUPPORTED_FORMAT" || err.code === "INVALID_FILE") {
-            setProcessError({ message: `${err.code}: ${err.message}` });
-            setFlowState("error");
-            return;
-          }
-        }
-      }
-      
       if (allowMultiple) {
         setFiles(prev => [...prev, ...fileArray]);
       } else {
@@ -92,45 +76,6 @@ export function ToolWorkspace({ slug, accept, maxSizeMB, actionType, allowMultip
     }
   };
 
-  const getEndpoint = (slug: string) => {
-    switch (slug) {
-      case "merge-pdf": return "/api/pdf/merge";
-      case "split-pdf": return "/api/pdf/split";
-      case "rotate-pdf": return "/api/pdf/rotate";
-      case "organize-pdf": return "/api/pdf/organize";
-      case "watermark": return "/api/pdf/watermark";
-      case "page-numbers": return "/api/pdf/page-numbers";
-      case "jpg-to-pdf": return "/api/pdf/image-to-pdf";
-      case "scan-to-pdf": return "/api/pdf/image-to-pdf";
-      case "resize-pdf": return "/api/pdf/resize";
-      case "protect-pdf": return "/api/pdf/protect";
-      case "unlock-pdf": return "/api/pdf/unlock";
-      case "compress-pdf": return "/api/pdf/compress";
-      case "ai-summarizer": return "/api/pdf/summarize";
-      case "translate-pdf": return "/api/pdf/translate";
-      case "chat-with-pdf": return "/api/pdf/chat";
-      case "word-to-pdf": 
-      case "excel-to-pdf":
-      case "powerpoint-to-pdf": return "/api/pdf/convert-to-pdf";
-      case "pdf-to-jpg":
-      case "pdf-to-png": return `/api/pdf/pdf-to-image/${slug}`;
-      case "repair-pdf": return "/api/pdf/repair";
-      case "pdf-to-pdfa": return "/api/pdf/pdfa";
-      case "pdf-to-markdown": return "/api/pdf/markdown";
-      case "html-to-pdf": return "/api/pdf/html-to-pdf";
-      case "ocr-pdf": return "/api/pdf/ocr";
-      case "pdf-to-word":
-      case "pdf-to-excel":
-      case "pdf-to-powerpoint": return `/api/pdf/export/${slug}`;
-      case "edit-pdf":
-      case "sign-pdf":
-      case "compare-pdf":
-      case "redact-pdf":
-      case "crop-pdf":
-      case "pdf-forms": return `/api/pdf/ui/${slug}`;
-      default: return `/api/pdf/${slug}`;
-    }
-  };
 
   const handleProcess = async (config?: Record<string, unknown>, customFile?: File) => {
     setFlowState("processing");
@@ -712,29 +657,38 @@ export function ToolWorkspace({ slug, accept, maxSizeMB, actionType, allowMultip
       }
     }
 
-    // Phase 3 Proof-of-Concept: Route Compress PDF through Job System
-    if (slug === "compress-pdf" && v1FileId) {
+    // Standardize Compress PDF through V1 Job System
+    if (slug === "compress-pdf") {
       try {
+        if (!files || files.length === 0) {
+          throw new Error("Please select a PDF file to compress.");
+        }
+
+        const v1File = await uploadFileToV1(files[0]!);
+
         const job = await createJob({
           tool: "compress-pdf",
-          inputFileIds: [v1FileId],
+          inputFileIds: [v1File.id],
           options: config ? (config as Record<string, any>) : { level: "recommended" },
         });
 
         // Poll job status until COMPLETED or FAILED
         let active = true;
         while (active) {
-          await new Promise((res) => setTimeout(res, 1200));
+          await new Promise((res) => setTimeout(res, 1000));
           const updatedJob = await getJob(job.id);
 
           if (updatedJob.status === "COMPLETED") {
             active = false;
+            setIsV1JobResult(true);
+
             if (updatedJob.outputFileId) {
               setResultId(updatedJob.outputFileId);
-              setIsV1JobResult(true);
             }
             if (updatedJob.outputFile?.originalName) {
               setResultFileName(updatedJob.outputFile.originalName);
+            } else {
+              setResultFileName("compressed-document.pdf");
             }
 
             const metrics = updatedJob.options?.metrics as
@@ -755,13 +709,13 @@ export function ToolWorkspace({ slug, accept, maxSizeMB, actionType, allowMultip
             return;
           } else if (updatedJob.status === "FAILED" || updatedJob.status === "CANCELLED") {
             active = false;
-            throw new Error(updatedJob.errorMessage || "We couldn't process this PDF. Please try another file.");
+            throw new Error(updatedJob.errorMessage || "We couldn't compress this PDF. Please try another file.");
           }
         }
       } catch (err: any) {
-        console.error("Job processing error:", err);
+        console.error("Job processing error for compress-pdf:", err);
         setProcessError({
-          message: err?.message || "Failed to process PDF job",
+          message: err?.message || "Failed to compress PDF",
           isAuth: false,
         });
         setFlowState("error");
@@ -769,82 +723,25 @@ export function ToolWorkspace({ slug, accept, maxSizeMB, actionType, allowMultip
       }
     }
 
-    try {
-      const formData = new FormData();
-      const filesToUpload = customFile ? [customFile] : files;
-      
-      if (filesToUpload && filesToUpload.length > 0) {
-        filesToUpload.forEach(f => formData.append("files", f));
-        if (filesToUpload[0]) {
-          formData.append("file", filesToUpload[0]);
-        }
-      }
+    // All 12 Core PDF Tools are handled in the V1 Job Architecture blocks above
+    const V1_CORE_TOOLS = new Set([
+      "merge-pdf", "split-pdf", "rotate-pdf", "organize-pdf", "resize-pdf",
+      "watermark", "watermark-pdf", "page-numbers", "protect-pdf", "unlock-pdf",
+      "compress-pdf", "repair-pdf", "pdf-to-pdfa"
+    ]);
 
-      if (config) {
-        Object.keys(config).forEach(key => {
-          if (Array.isArray(config[key])) {
-             formData.append(key, JSON.stringify(config[key]));
-          } else {
-             formData.append(key, String(config[key]));
-          }
-        });
-      }
-
-      const endpoint = getEndpoint(slug);
-      
-      const response = await apiClient(endpoint, {
-        data: formData,
-      });
-
-      if (response.document) {
-        if (response.document.id) {
-          setResultId(response.document.id);
-        }
-        if (response.document.originalName) {
-          setResultFileName(response.document.originalName);
-        }
-      }
-
-      if (response.documents && Array.isArray(response.documents) && response.documents.length > 0) {
-        setResultDocuments(response.documents);
-      } else if (response.document) {
-        setResultDocuments([response.document]);
-      } else {
-        setResultDocuments(null);
-      }
-
-      if (response.savedPercentage !== undefined && response.savedPercentage > 0 && response.savedBytes) {
-        const formatBytes = (bytes: number) => {
-          if (bytes < 1024) return `${bytes} B`;
-          if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-          return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-        };
-        setCompressionSavedText(`${response.savedPercentage}% (${formatBytes(response.savedBytes)})`);
-      } else if (actionType === "compress") {
-        setCompressionSavedText("Optimized");
-      } else {
-        setCompressionSavedText(null);
-      }
-      
-      setFlowState("result");
-    } catch (error: any) {
-      console.error("Processing error:", error);
-      const msg = error?.message || "Failed to process document";
-      const isAuth = msg.toLowerCase().includes("unauthorized") || msg.toLowerCase().includes("login");
+    if (!V1_CORE_TOOLS.has(slug)) {
       setProcessError({
-        message: isAuth 
-          ? "You must be logged in to process documents. Please sign in or create an account."
-          : msg,
-        isAuth,
+        message: `The tool "${slug}" is scheduled for an upcoming release. Please use one of our 12 Core PDF Tools.`,
+        isAuth: false,
       });
       setFlowState("error");
+      return;
     }
   };
 
   const handleDownloadSingle = async (docId: string, customName?: string) => {
-    const downloadEndpoint = isV1JobResult
-      ? `${API_BASE_URL}/api/v1/files/${docId}/download`
-      : `${API_BASE_URL}/api/documents/download/${docId}`;
+    const downloadEndpoint = `${API_BASE_URL}/api/v1/files/${docId}/download`;
 
     const response = await fetch(downloadEndpoint, {
       method: "GET",
@@ -927,7 +824,6 @@ export function ToolWorkspace({ slug, accept, maxSizeMB, actionType, allowMultip
     setCompressionSavedText(null);
     setDownloadError(null);
     setProcessError(null);
-    setV1FileId(null);
   };
 
   const renderConfig = () => {
@@ -1003,7 +899,7 @@ export function ToolWorkspace({ slug, accept, maxSizeMB, actionType, allowMultip
             onStartOver={handleRetry}
             isDownloading={isDownloading}
             downloadError={downloadError}
-            downloadUrl={resultId ? `${API_BASE_URL}/api/documents/download/${resultId}` : null}
+            downloadUrl={resultId ? `${API_BASE_URL}/api/v1/files/${resultId}/download` : null}
             resultDocuments={resultDocuments}
             onDownloadSingle={handleDownloadSingle}
           />
@@ -1012,7 +908,7 @@ export function ToolWorkspace({ slug, accept, maxSizeMB, actionType, allowMultip
       
       {flowState === "error" && (
         <ErrorState 
-          message={processError?.message || `A file exceeds the maximum allowed size of ${maxSizeMB}MB for free accounts. Please upgrade to Pro to process larger files.`}
+          message={processError?.message || `A file exceeds the maximum allowed size of ${Number(process.env.NEXT_PUBLIC_MAX_FILE_SIZE_MB || maxSizeMB || 50)}MB. Please select a smaller file.`}
           onRetry={handleRetry} 
           actionText={processError?.isAuth ? "Sign In" : undefined}
           onAction={processError?.isAuth ? () => router.push("/login") : undefined}

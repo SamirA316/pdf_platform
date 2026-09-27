@@ -4,6 +4,7 @@ import { PrismaClient } from "@prisma/client";
 export const prisma = new PrismaClient() as PrismaClient & {
   file: any;
   job: any;
+  storageQuota: any;
 };
 
 export default prisma;

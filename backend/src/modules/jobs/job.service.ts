@@ -21,6 +21,8 @@ import {
   JobCancelFailedError,
   InvalidJobStatusError,
 } from "../../common/errors/AppError";
+import { logger } from "../../common/logger";
+import { encryptJobSecrets, decryptJobSecrets } from "../../common/job-crypto";
 
 /**
  * Strips sensitive keys like passwords before persisting options to database.
@@ -31,6 +33,23 @@ function sanitizeOptionsForStorage(options: Record<string, any>): Record<string,
   delete sanitized.ownerPassword;
   delete sanitized.password;
   return sanitized;
+}
+
+/**
+ * Extracts sensitive passwords to be encrypted in secretOptions.
+ */
+function extractJobSecrets(options: Record<string, any>): Record<string, any> | null {
+  const secrets: Record<string, any> = {};
+  if (typeof options.userPassword === "string" && options.userPassword) {
+    secrets.userPassword = options.userPassword;
+  }
+  if (typeof options.ownerPassword === "string" && options.ownerPassword) {
+    secrets.ownerPassword = options.ownerPassword;
+  }
+  if (typeof options.password === "string" && options.password) {
+    secrets.password = options.password;
+  }
+  return Object.keys(secrets).length > 0 ? secrets : null;
 }
 
 export class JobService {
@@ -62,6 +81,7 @@ export class JobService {
       outputFile: job.outputFile
         ? {
             id: job.outputFile.id,
+            filename: job.outputFile.originalName,
             originalName: job.outputFile.originalName,
             mimeType: job.outputFile.mimeType,
             size: job.outputFile.size,
@@ -73,6 +93,7 @@ export class JobService {
       outputFiles: job.outputFiles
         ? job.outputFiles.map((f: any) => ({
             id: f.id,
+            filename: f.originalName,
             originalName: f.originalName,
             mimeType: f.mimeType,
             size: f.size,
@@ -92,11 +113,38 @@ export class JobService {
     };
   }
 
+  private executionOptionsCache = new Map<string, any>();
+
+  getExecutionOptions(jobId: string): Record<string, any> | undefined {
+    return this.executionOptionsCache.get(jobId);
+  }
+
+  setExecutionOptions(jobId: string, options: any): void {
+    this.executionOptionsCache.set(jobId, options);
+  }
+
+  clearExecutionOptions(jobId: string): void {
+    this.executionOptionsCache.delete(jobId);
+  }
+
+  private workerNotifier: (() => void) | null = null;
+
+  /**
+   * Registers a callback from the durable job worker to trigger immediate claiming on new job creation.
+   */
+  setWorkerNotifier(notifier: () => void): void {
+    this.workerNotifier = notifier;
+  }
+
   /**
    * Creates a new job record in QUEUED status and asynchronously triggers processing.
    */
   async createJob(userId: string, data: ICreateJobDto): Promise<IJobDto> {
     const { validatedTool, validatedInputFileIds, validatedOptions } = await validateCreateJob(userId, data);
+
+    const secrets = extractJobSecrets(validatedOptions);
+    const encryptedSecretOptions = secrets ? encryptJobSecrets(secrets) : null;
+    const sanitizedOptions = sanitizeOptionsForStorage(validatedOptions);
 
     const job = await prisma.job.create({
       data: {
@@ -105,33 +153,41 @@ export class JobService {
         status: JobStatus.QUEUED,
         progress: 0,
         inputFileIds: JSON.stringify(validatedInputFileIds),
-        options: JSON.stringify(sanitizeOptionsForStorage(validatedOptions)),
+        options: JSON.stringify(sanitizedOptions),
+        secretOptions: encryptedSecretOptions,
       },
     });
 
-    console.log(`[JOB] Created ${job.id} for user ${userId} [tool: ${validatedTool}]`);
+    // Store in-memory options for execution (including ephemeral passwords for protect/unlock)
+    this.setExecutionOptions(job.id, validatedOptions);
 
-    // Asynchronously dispatch the processing pipeline without blocking HTTP response
-    setImmediate(() => {
-      this.dispatchJob(job.id, userId, validatedTool, validatedInputFileIds, validatedOptions).catch((err) => {
-        console.error(`[JOB] Unhandled dispatch failure for ${job.id}:`, err);
+    logger.info(`[JOB] Created ${job.id} for user ${userId} [tool: ${validatedTool}]`, "JOB");
+
+    // Notify durable background worker if active
+    if (this.workerNotifier) {
+      this.workerNotifier();
+    } else {
+      // Ephemeral fallback for isolated test suites
+      setImmediate(() => {
+        this.dispatchJob(job.id, userId, validatedTool, validatedInputFileIds, validatedOptions).catch((err) => {
+          logger.error(`[JOB] Unhandled dispatch failure for ${job.id}`, "JOB");
+        });
       });
-    });
+    }
 
     return this.toDto(job);
   }
 
   /**
-   * Asynchronous executor routing jobs to respective processors.
+   * Dispatches a job atomically from QUEUED to PROCESSING.
    */
-  private async dispatchJob(
+  async dispatchJob(
     jobId: string,
     userId: string,
     tool: string,
     inputFileIds: string[],
     options: Record<string, any>
   ): Promise<void> {
-    // 1. Atomic transition from QUEUED to PROCESSING
     const startResult = await prisma.job.updateMany({
       where: {
         id: jobId,
@@ -145,11 +201,44 @@ export class JobService {
     });
 
     if (startResult.count === 0) {
-      console.log(`[JOB] Job ${jobId} was cancelled before processing started`);
+      const current = await prisma.job.findUnique({ where: { id: jobId } });
+      if (current && current.status === JobStatus.PROCESSING) {
+        return this.processClaimedJob(jobId, userId, tool, inputFileIds, options);
+      }
       return;
     }
 
+    return this.processClaimedJob(jobId, userId, tool, inputFileIds, options);
+  }
+
+  /**
+   * Executes the processor pipeline for an already-claimed job in PROCESSING status.
+   */
+  async processClaimedJob(
+    jobId: string,
+    userId: string,
+    tool: string,
+    inputFileIds: string[],
+    options: Record<string, any>
+  ): Promise<void> {
     const generatedOutputFileIds: string[] = [];
+
+    // Ensure sensitive secrets are decrypted and available even if in-memory cache was lost
+    let effectiveOptions = { ...options };
+    if (!effectiveOptions.userPassword && !effectiveOptions.password) {
+      try {
+        const jobRecord = await prisma.job.findUnique({
+          where: { id: jobId },
+          select: { secretOptions: true },
+        });
+        if (jobRecord?.secretOptions) {
+          const decrypted = decryptJobSecrets(jobRecord.secretOptions);
+          effectiveOptions = { ...effectiveOptions, ...decrypted };
+        }
+      } catch (err: any) {
+        logger.error(`[JOB] Failed to decrypt job secretOptions for ${jobId}`, "JOB");
+      }
+    }
 
     try {
       let resultOutputFileId: string | null = null;
@@ -160,7 +249,7 @@ export class JobService {
           jobId,
           userId,
           inputFileId: inputFileIds[0]!,
-          options,
+          options: effectiveOptions,
         });
         resultOutputFileId = result.outputFileId;
         resultMetrics = result.metrics;
@@ -170,7 +259,7 @@ export class JobService {
           jobId,
           userId,
           inputFileIds,
-          options,
+          options: effectiveOptions,
         });
         resultOutputFileId = result.outputFileId;
         resultMetrics = result.metrics;
@@ -180,7 +269,7 @@ export class JobService {
           jobId,
           userId,
           inputFileId: inputFileIds[0]!,
-          options,
+          options: effectiveOptions,
         });
         resultOutputFileId = result.outputFileIds[0] || null;
         resultMetrics = result.metrics;
@@ -190,7 +279,7 @@ export class JobService {
           jobId,
           userId,
           inputFileId: inputFileIds[0]!,
-          options,
+          options: effectiveOptions,
         });
         resultOutputFileId = result.outputFileId;
         resultMetrics = result.metrics;
@@ -200,7 +289,7 @@ export class JobService {
           jobId,
           userId,
           inputFileId: inputFileIds[0]!,
-          options,
+          options: effectiveOptions,
         });
         resultOutputFileId = result.outputFileId;
         resultMetrics = result.metrics;
@@ -210,7 +299,7 @@ export class JobService {
           jobId,
           userId,
           inputFileId: inputFileIds[0]!,
-          options,
+          options: effectiveOptions,
         });
         resultOutputFileId = result.outputFileId;
         resultMetrics = result.metrics;
@@ -220,7 +309,7 @@ export class JobService {
           jobId,
           userId,
           inputFileId: inputFileIds[0]!,
-          options,
+          options: effectiveOptions,
         });
         resultOutputFileId = result.outputFileId;
         resultMetrics = result.metrics;
@@ -230,7 +319,7 @@ export class JobService {
           jobId,
           userId,
           inputFileId: inputFileIds[0]!,
-          options,
+          options: effectiveOptions,
         });
         resultOutputFileId = result.outputFileId;
         resultMetrics = result.metrics;
@@ -240,7 +329,7 @@ export class JobService {
           jobId,
           userId,
           inputFileId: inputFileIds[0]!,
-          options,
+          options: effectiveOptions,
         });
         resultOutputFileId = result.outputFileId;
         resultMetrics = result.metrics;
@@ -250,7 +339,7 @@ export class JobService {
           jobId,
           userId,
           inputFileId: inputFileIds[0]!,
-          options,
+          options: effectiveOptions,
         });
         resultOutputFileId = result.outputFileId;
         resultMetrics = result.metrics;
@@ -260,7 +349,7 @@ export class JobService {
           jobId,
           userId,
           inputFileId: inputFileIds[0]!,
-          options,
+          options: effectiveOptions,
         });
         resultOutputFileId = result.outputFileId;
         resultMetrics = result.metrics;
@@ -270,7 +359,7 @@ export class JobService {
           jobId,
           userId,
           inputFileId: inputFileIds[0]!,
-          options,
+          options: effectiveOptions,
         });
         resultOutputFileId = result.outputFileId;
         resultMetrics = result.metrics;
@@ -291,7 +380,7 @@ export class JobService {
           outputFileId: resultOutputFileId,
           completedAt: new Date(),
           options: JSON.stringify({
-            ...sanitizeOptionsForStorage(options),
+            ...sanitizeOptionsForStorage(effectiveOptions),
             metrics: resultMetrics,
           }),
         },
@@ -299,33 +388,37 @@ export class JobService {
 
       // If completeResult.count === 0, job was cancelled concurrently while processor was running!
       if (completeResult.count === 0) {
-        console.log(`[JOB] Job ${jobId} was cancelled or deleted during processing. Cleaning up ${generatedOutputFileIds.length} generated output file(s)`);
+        logger.info(`[JOB] Job ${jobId} was cancelled or deleted during processing. Cleaning up ${generatedOutputFileIds.length} generated output file(s)`, "JOB");
         for (const fileId of generatedOutputFileIds) {
           try {
             await filesService.deleteFile(userId, fileId);
-          } catch (cleanupErr: any) {
-            console.warn(`[JOB] Failed to clean up output file ${fileId} after job cancellation:`, cleanupErr.message || cleanupErr);
+          } catch {
+            logger.warn(`[JOB] Failed to clean up output file ${fileId} after job cancellation.`, "JOB");
           }
         }
         return;
       }
     } catch (err: any) {
-      console.error(`[JOB] Failed ${jobId}:`, err.message || err);
+      logger.error(`PDF job ${jobId} failed.`, "JOB");
 
       // Clean up all generated output files on dispatch failure to prevent orphaned files
       if (generatedOutputFileIds.length > 0) {
         for (const fileId of generatedOutputFileIds) {
           try {
-            console.warn(`[JOB] Cleaning up orphan output file ${fileId} due to dispatch failure for job ${jobId}`);
+            logger.info(`[JOB] Cleaning up orphan output file ${fileId} due to dispatch failure for job ${jobId}`, "JOB");
             await filesService.deleteFile(userId, fileId);
-          } catch (cleanupErr: any) {
-            console.warn(`[JOB] Failed to clean up orphan output file ${fileId}:`, cleanupErr.message || cleanupErr);
+          } catch {
+            logger.warn(`[JOB] Failed to clean up orphan output file ${fileId}.`, "JOB");
           }
         }
       }
 
       const failureMessage =
-        tool === "merge-pdf"
+        err.code === "STORAGE_QUOTA_EXCEEDED"
+          ? err.message || "Storage quota exceeded. Please free up space."
+          : err.code === "PAYLOAD_TOO_LARGE" || err.code === "FILE_TOO_LARGE"
+          ? err.message || "Generated output exceeds maximum allowed file size."
+          : tool === "merge-pdf"
           ? "We couldn't merge these PDFs. Please try again."
           : tool === "split-pdf"
           ? "We couldn't split this PDF. Please try again."
@@ -374,9 +467,11 @@ export class JobService {
             completedAt: new Date(),
           },
         });
-      } catch (innerErr: any) {
-        console.warn(`[JOB] Unable to update job status to FAILED: ${innerErr.message || innerErr}`);
+      } catch {
+        logger.warn(`[JOB] Unable to update job status to FAILED for job ${jobId}.`, "JOB");
       }
+    } finally {
+      this.clearExecutionOptions(jobId);
     }
   }
 
@@ -388,17 +483,16 @@ export class JobService {
       throw new JobNotFoundError("Job not found.");
     }
 
-    const job = await prisma.job.findUnique({
-      where: { id: jobId },
+    const job = await prisma.job.findFirst({
+      where: {
+        id: jobId,
+        userId,
+      },
       include: { outputFile: true, outputFiles: true },
     });
 
     if (!job) {
       throw new JobNotFoundError("Job not found.");
-    }
-
-    if (job.userId !== userId) {
-      throw new JobAccessDeniedError("Access to this job is denied.");
     }
 
     return this.toDto(job);
@@ -454,16 +548,15 @@ export class JobService {
       throw new JobNotFoundError("Job not found.");
     }
 
-    const job = await prisma.job.findUnique({
-      where: { id: jobId },
+    const job = await prisma.job.findFirst({
+      where: {
+        id: jobId,
+        userId,
+      },
     });
 
     if (!job) {
       throw new JobNotFoundError("Job not found.");
-    }
-
-    if (job.userId !== userId) {
-      throw new JobAccessDeniedError("Access to this job is denied.");
     }
 
     // Atomic conditional cancellation: Only cancel if currently QUEUED or PROCESSING
@@ -480,16 +573,16 @@ export class JobService {
     });
 
     if (updateResult.count === 0) {
-      const refreshed = await prisma.job.findUnique({ where: { id: jobId } });
+      const refreshed = await prisma.job.findFirst({ where: { id: jobId, userId } });
       throw new JobCancelFailedError(`Cannot cancel job in '${refreshed?.status || job.status}' state.`);
     }
 
-    const updated = await prisma.job.findUnique({
-      where: { id: jobId },
+    const updated = await prisma.job.findFirst({
+      where: { id: jobId, userId },
       include: { outputFile: true, outputFiles: true },
     });
 
-    console.log(`[JOB] Cancelled ${jobId} by user ${userId}`);
+    logger.info(`[JOB] Cancelled ${jobId} by user ${userId}`, "JOB");
     return this.toDto(updated!);
   }
 
@@ -501,16 +594,15 @@ export class JobService {
       throw new JobNotFoundError("Job not found.");
     }
 
-    const job = await prisma.job.findUnique({
-      where: { id: jobId },
+    const job = await prisma.job.findFirst({
+      where: {
+        id: jobId,
+        userId,
+      },
     });
 
     if (!job) {
       throw new JobNotFoundError("Job not found.");
-    }
-
-    if (job.userId !== userId) {
-      throw new JobAccessDeniedError("Access to this job is denied.");
     }
 
     if (job.status === JobStatus.QUEUED || job.status === JobStatus.PROCESSING) {
@@ -519,11 +611,14 @@ export class JobService {
       );
     }
 
-    await prisma.job.delete({
-      where: { id: jobId },
+    await prisma.job.deleteMany({
+      where: {
+        id: jobId,
+        userId,
+      },
     });
 
-    console.log(`[JOB] Deleted ${jobId} from history`);
+    logger.info(`[JOB] Deleted ${jobId} from history`, "JOB");
   }
 }
 

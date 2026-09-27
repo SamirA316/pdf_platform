@@ -8,7 +8,7 @@ import { CheckCircle2, AlertCircle, Eye, EyeOff } from "lucide-react";
 import { useDispatch } from "react-redux";
 import { login } from "@/store/slices/authSlice";
 import { Logo } from "@/components/shared/Logo";
-import { apiClient } from "@/lib/apiClient";
+import { registerUser, verifyUserOtp } from "@/lib/api";
 
 export default function SignupPage() {
   const [formData, setFormData] = useState({ name: "", email: "", password: "", confirmPassword: "" });
@@ -22,6 +22,9 @@ export default function SignupPage() {
 
   const dispatch = useDispatch();
   const router = useRouter();
+
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [resendSuccess, setResendSuccess] = useState("");
 
   const validate = () => {
     let isValid = true;
@@ -46,8 +49,11 @@ export default function SignupPage() {
     if (!formData.password) {
       newErrors.password = "Password is required";
       isValid = false;
-    } else if (formData.password.length < 6) {
-      newErrors.password = "Password must be at least 6 characters";
+    } else if (formData.password.length < 8) {
+      newErrors.password = "Password must be at least 8 characters";
+      isValid = false;
+    } else if (!/^(?=.*[A-Za-z])(?=.*\d)/.test(formData.password)) {
+      newErrors.password = "Password must contain at least one letter and one number";
       isValid = false;
     }
 
@@ -63,14 +69,35 @@ export default function SignupPage() {
     return isValid;
   };
 
+  const handleResendOTP = async () => {
+    if (resendCooldown > 0 || loading) return;
+    setErrors((prev) => ({ ...prev, server: "" }));
+    setResendSuccess("");
+    try {
+      const { resendUserOtp } = await import("@/lib/api");
+      const res = await resendUserOtp({ email: registeredEmail });
+      setResendSuccess(res.message || "New verification code sent!");
+      setResendCooldown(60);
+      const timer = setInterval(() => {
+        setResendCooldown((prev) => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } catch (err: any) {
+      setErrors((prev) => ({ ...prev, server: err?.message || "Failed to resend code." }));
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (validate()) {
       setLoading(true);
       try {
-        await apiClient("/api/auth/register", {
-          data: { name: formData.name, email: formData.email, password: formData.password },
-        });
+        await registerUser({ name: formData.name, email: formData.email, password: formData.password });
 
         setRegisteredEmail(formData.email);
         setStep(2);
@@ -95,11 +122,11 @@ export default function SignupPage() {
 
     setLoading(true);
     try {
-      const data = await apiClient("/api/auth/verify-otp", {
-        data: { email: registeredEmail, otp },
-      });
+      const data = await verifyUserOtp({ email: registeredEmail, otp });
 
-      dispatch(login(data.user));
+      if (data.user) {
+        dispatch(login(data.user));
+      }
       router.push("/");
     } catch (err) {
       if (err instanceof Error) {
@@ -358,11 +385,24 @@ export default function SignupPage() {
                   {errors.server}
                 </div>
               )}
+              {resendSuccess && (
+                <div className="bg-emerald-50 text-emerald-600 p-2.5 rounded-lg text-sm text-center font-medium">
+                  {resendSuccess}
+                </div>
+              )}
               <Button disabled={loading || otp.length !== 6} type="submit" className="w-full rounded-xl bg-[#E5322D] hover:bg-[#CC2A26] text-white font-bold text-lg h-12 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:hover:scale-100 disabled:cursor-not-allowed">
                 {loading ? "Verifying..." : "Verify & Log in"}
               </Button>
-              <div className="text-center">
-                <button type="button" onClick={() => setStep(1)} className="text-sm font-semibold text-slate-500 hover:text-slate-800 transition-colors">
+              <div className="flex items-center justify-between text-sm pt-1">
+                <button
+                  type="button"
+                  onClick={handleResendOTP}
+                  disabled={resendCooldown > 0 || loading}
+                  className="font-semibold text-[#E5322D] hover:underline disabled:text-slate-400 disabled:no-underline"
+                >
+                  {resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : "Resend code"}
+                </button>
+                <button type="button" onClick={() => setStep(1)} className="font-semibold text-slate-500 hover:text-slate-800 transition-colors">
                   Wrong email? Go back
                 </button>
               </div>

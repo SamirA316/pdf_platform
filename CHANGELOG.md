@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Phase 4 Audit Remediation & Production Freeze] - 2026-09-22
+
+### Added & Remediated
+- **PDF/A Compliance Engine & Deep AST Validator (Phase 4.11)**:
+  - Embedded authentic 548-byte standard sRGB IEC61966-2.1 ICC profile byte stream into document context.
+  - Linked ICC profile to `/DestOutputProfile` under `/OutputIntents` dictionary (`/GTS_PDFA1`).
+  - Implemented independent `PdfaValidator` inspecting document dictionary AST, metadata streams, encryption absence, and ICC magic signatures (eliminating raw string regex fake-passes).
+  - Enhanced test suite `phase4_pdfa.test.ts` (10/10 PASS) with deep AST inspection and negative non-compliance rejection.
+- **Protect PDF Cryptographic Verification (Phase 4.8)**:
+  - Enforced explicit `algorithm: 'AES-256'` parameter in `pdfDoc.encrypt(...)`.
+  - Added automated cryptographic test assertion in `phase4_protect_unlock.test.ts` verifying `/V 5`, `/R 6`, `/Length 256`, and `/AESV3` cipher profile per ISO 32000-1 / ExtensionLevel 8.
+- **Testing Infrastructure**:
+  - Created aggregate test runner `backend/tests/phase4_all.ts` accessible via `npm run test:phase4` (10/10 suites, 137 tests, 100% PASS in ~27s).
+  - Configured `npm test` as the full regression suite (`backend/tests/run_regression.ts`) covering Phase 2, Phase 3, and all Phase 4 modules (100% PASS in ~31s).
+- **Architecture & Documentation Synchronization**:
+  - Reconciled `docs/04-api/current-api-map.md` marking all Phase 4 tools (4.1 through 4.11) as `COMPLETE & VERIFIED ✅`.
+  - Updated `docs/08-testing/current-test-status.md` distinguishing verified Phase 4 core tools (11 tools, 100% automated pass) from future scheduled phases (Phase 5-8).
+  - Created `docs/03-architecture/system-dependencies.md` detailing `qpdf` and `ghostscript` requirements, installation, health checks, and engine fallbacks.
+  - Documented content scaling behavior and AcroForm annotations limitations in `docs/05-features/resize-pdf.md`.
+  - Created root `README.md` with complete getting started guide, test instructions, and system dependency matrix.
+
 ## [Phase 4.11 - PDF to PDF/A Archival Tool] - 2026-09-22
 
 ### Added

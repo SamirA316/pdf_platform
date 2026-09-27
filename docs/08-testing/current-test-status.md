@@ -1,77 +1,63 @@
-# Current Test Status & Verification Report (Phase 2)
+# Current Test Status & Verification Report (Phase 4 Frozen Complete)
 
 ## 1. Verification Summary
 
-This report tracks static contracts, upload validation, security isolation, and functional automated test suites across all platform phases. Phase 2 (File Management) has achieved 100% automated verification pass.
+This report tracks static contracts, upload validation, security isolation, and functional automated test suites across all platform phases.
+- **Phase 2 (File Management)**: 100% Automated Verification PASS ✅
+- **Phase 3 (Job Processing State Machine)**: 100% Automated Verification PASS ✅
+- **Phase 4 (Core PDF Tools 4.1 to 4.11)**: 100% Automated Verification PASS ✅ (`npm run test:phase4`)
+- **Phase 5.1 (Editor Foundation)**: 100% Automated Verification PASS ✅ (`npm run test:phase5:foundation`)
+- **Phase 5.2 (Viewer & Rendering)**: 100% Automated Verification PASS ✅ (`npm run test:phase5:viewer`)
+- **Phase 5.3 (Navigation & Thumbnails)**: 100% Automated Verification PASS ✅ (`npm run test:phase5:navigation`)
+- **Phase 5.4 (Zoom, Pan & Rotate)**: 100% Automated Verification PASS ✅ (`npm run test:phase5:zoom-pan-rotate`)
+- **Phase 5.5.1 (Text Object Model)**: 100% Automated Verification PASS ✅ (`npm run test:phase5:text-model`)
+- **Phase 5.5.2 (Text Box Creation & Input)**: 100% Automated Verification PASS ✅ (`npm run test:phase5:text-box`)
+- **Phase 5.5.3 (Text Box Resizing & Bounding Handles)**: 100% Automated Verification PASS ✅ (`npm run test:phase5:resize`)
+- **Phase 5.5.4 (Text Object Move / Drag)**: 100% Automated Verification PASS ✅ (`npm run test:phase5:move`)
+- **Phase 5.5.5 (Text Formatting)**: 100% Automated Verification PASS ✅ (`npm run test:phase5:format`)
+- **Phase 5.5.6 (Text Object Rotation)**: 100% Automated Verification PASS ✅ (`npm run test:phase5:rotate`)
+- **Full Platform Regression Suite**: 100% PASS ✅ (`npm test`)
 
 > [!IMPORTANT]
-> The 34 PDF tools have **NOT** yet undergone automated end-to-end functional testing with real sample documents. Their code implementations are present in routes and controllers, but actual end-to-end processing pipeline verification is pending.
+> **Scope Distinction: Phase 4 Tools vs. Full 34-Tool Platform**:
+> - **Phase 4 Tools (11 Core Tools)**: `merge-pdf`, `split-pdf`, `rotate-pdf`, `organize-pdf`, `resize-pdf`, `watermark`, `page-numbers`, `protect-pdf`, `unlock-pdf`, `repair-pdf`, and `pdf-to-pdfa` have **100% automated integration test coverage** with real PDF parsing, state machine execution, and output compliance assertion.
+> - **Future Phases (Remaining 23 Tools)**: Advanced Canvas Editor (Phase 5), Office Converters (Phase 6), OCR/Raster Pipelines (Phase 7), and AI Services (Phase 8) are scheduled for subsequent migration and testing.
 
 ---
 
-## 2. Static & Contract Verification (PASS)
+## 2. Phase 4 Automated Test Suites Coverage (`npm run test:phase4`)
 
-| Verification Area | Target / File | Method | Result | Details |
+| Tool Module | Test Suite File | Tests | Coverage Scope | Status |
 |---|---|---|---|---|
-| **Backend TypeScript Build** | `backend/src/**/*.ts` | `npx tsc --noEmit` | **PASS** | 0 type errors detected |
-| **Frontend TypeScript Build** | `frontend/**/*.tsx`, `*.ts` | `npx tsc --noEmit` | **PASS** | 0 type errors detected |
-| **Unknown Tool Fallback Route** | `POST /api/pdf/:slug` | cURL API call | **PASS** | Returns HTTP 404 with `TOOL_NOT_FOUND` |
-| **Extension Disallowlist Check** | `flexibleUpload` middleware | cURL with `.json` payload | **PASS** | Returns HTTP 400 with `INVALID_EXTENSION` |
-| **Upload Size Constraint** | `uploadMiddleware` | Multer configuration | **PASS** | Configured for 100MB per file (`FILE_TOO_LARGE`) |
-| **Public Upload Exposure** | `backend/src/server.ts` | Static serving audit | **PASS** | `app.use("/uploads")` removed; downloads only via authenticated route |
-| **OCR Route Protection** | `POST /api/pdf/ocr-crop` | Middleware chain | **PASS** | `requireAuth` and `flexibleUpload` added |
-| **Frontend Navigation** | `GET /`, `GET /tools/[toolSlug]` | Dev server render | **PASS** | Pages render correct workspace wrappers |
-| **Auth UI Pages** | `GET /login`, `GET /signup` | Dev server render | **PASS** | Auth and OTP forms render |
-| **API v1 Health Endpoint** | `GET /api/v1/health` | cURL | **PASS** | Returns `{"success":true,"data":{"status":"ok"}}` |
-| **API v1 Module Routers** | `GET /api/v1/{module}` (10 modules) | cURL | **PASS** | Returns `{"success":true,"data":{...}}` standard envelope |
-| **API v1 Standard Error Handler** | `GET /api/v1/unknown-endpoint` | cURL | **PASS** | Returns `{"success":false,"error":{"code":"NOT_FOUND",...}}` |
-| **Legacy Endpoints Parity** | `POST /api/pdf/unknown-tool`, etc. | cURL | **PASS** | Legacy routes operate without regression |
+| **4.1 Merge PDF** | `phase4_merge.test.ts` | 13 | Multi-file merge, order preservation, security isolation, memory management | **100% PASS ✅** |
+| **4.2 Split PDF** | `phase4_split.test.ts` | 14 | Single page, ranges, all pages, bounds check, ZIP output, cleanup | **100% PASS ✅** |
+| **4.3 Rotate PDF** | `phase4_rotate.test.ts` | 14 | Global, selective page rotation, cumulative angles (90/180/270), cleanup | **100% PASS ✅** |
+| **4.4 Organize PDF** | `phase4_organize.test.ts` | 15 | Reordering, duplication, selective extraction, page rotation, 200 page cap | **100% PASS ✅** |
+| **4.5 Resize PDF** | `phase4_resize.test.ts` | 16 | Standard presets (A3, A4, Letter, Legal), orientations, custom mm/pt/in | **100% PASS ✅** |
+| **4.6 Watermark PDF** | `phase4_watermark.test.ts` | 19 | Text & image watermarking, positioning, opacity, multi-tenant file checks | **100% PASS ✅** |
+| **4.7 Page Numbers** | `phase4_page_numbers.test.ts` | 14 | Positions, custom formats, offset starting numbers, page filtering | **100% PASS ✅** |
+| **4.8 Protect PDF** | `phase4_protect_unlock.test.ts` | 14 | Cryptographic AES-256 (V:5, R:6, Length:256, AESV3), granular permissions | **100% PASS ✅** |
+| **4.9 Unlock PDF** | `phase4_protect_unlock.test.ts` | (Included above) | Password verification, decryption into clean PDF, invalid password rejection | **100% PASS ✅** |
+| **4.10 Repair PDF** | `phase4_repair.test.ts` | 8 | Multi-tier pipeline (qpdf ➔ gs ➔ TS reconstruction fallback), corrupt rejection | **100% PASS ✅** |
+| **4.11 PDF to PDF/A** | `phase4_pdfa.test.ts` | 10 | ISO 19005-1/2/3 Level B, embedded sRGB ICC profile, deep AST validator | **100% PASS ✅** |
+| **Consolidated Phase 4** | `phase4_all.ts` | **137 Tests** | Automated sequential suite runner (`npm run test:phase4`) | **100% PASS ✅** |
 
 ---
 
-## 3. Upload Validation & Technical Debt Audit
+## 3. Platform Architecture & Scheduled Phases Roadmap
 
-### Current Status:
-- **Allowlist Filtering**: Checks incoming file extension against `ALLOWED_EXTENSIONS` and MIME against `ALLOWED_MIME_TYPES`.
-- **Field Flexibility**: Uses `uploadMiddleware.any()`.
-
-### Known Limitations:
-1. **MIME Validation Fallback**:
-   - In `backend/src/middlewares/upload.middleware.ts`:
-     ```ts
-     if (!ALLOWED_MIME_TYPES.has(mime) && !ALLOWED_EXTENSIONS.has(ext))
-     ```
-   - Because extension was already verified earlier in the filter, this check permits an upload if the extension is valid (e.g., `.pdf`), even if the client-supplied MIME type is invalid or generic (`application/octet-stream`).
-2. **Arbitrary Multipart Fields**:
-   - `uploadMiddleware.any()` accepts any multipart form field name (`file`, `files`, `custom_field`, etc.).
-   - This technical debt is preserved in Phase 0 to ensure backwards compatibility with diverse frontend upload forms.
-
-### Target Remediation:
-- **Phase 2**: Replace `uploadMiddleware.any()` with strict tool-specific multipart field validators (`upload.single("file")`, `upload.array("files", 20)`).
-- **Security Phase**: Implement true magic-byte / file signature inspection on the incoming buffer/stream rather than relying solely on client-supplied extension and MIME headers.
-
----
-
-## 4. Mock OAuth Status (DEVELOPMENT ONLY)
-
-- `/api/auth/mock/:provider` and fallback redirection in `/api/auth/google`, `/api/auth/facebook`, `/api/auth/apple` are active.
-- **Classification**: **DEVELOPMENT ONLY**. Active solely because production OAuth credentials (client IDs & client secrets) are not yet configured.
-- **Production Target**: Scheduled for complete removal during the production hardening phase.
-
----
-
-## 5. Actual Functional End-to-End Verification (PENDING)
-
-| Tool Category | Tool Slugs | Engine Dependencies | E2E Status | Scheduled Phase |
+| Tool Category | Tool Slugs | Engine Dependencies | E2E Status | Phase Allocation |
 |---|---|---|---|---|
-| **PDF Merge** | `merge-pdf` | `pdf-lib` | **VERIFIED ✅** | Phase 4.1 (Job System E2E Verified) |
-| **Core Manipulations** | `split-pdf`, `rotate-pdf`, `organize-pdf` | `pdf-lib` | **UNVERIFIED** | Phase 4.2 - 4.4 (Core Engine) |
+| **Phase 4 Core Tools** | `merge-pdf`, `split-pdf`, `rotate-pdf`, `organize-pdf`, `resize-pdf`, `watermark`, `page-numbers`, `protect-pdf`, `unlock-pdf`, `repair-pdf`, `pdf-to-pdfa` | `@cantoo/pdf-lib`, `ghostscript`, `qpdf` | **VERIFIED ✅** | Phase 4 (Frozen Complete) |
 | **PDF Compression** | `compress-pdf` | `ghostscript` / in-process fallback | **VERIFIED ✅** | Phase 3 (Job System E2E Verified) |
-| **Security & Optimization** | `protect-pdf`, `unlock-pdf`, `repair-pdf`, `pdf-to-pdfa` | `ghostscript`, `qpdf` | **UNVERIFIED** | Phase 4 (PDF Operations Migration) |
-| **Office & Format Conversions** | `pdf-to-word`, `pdf-to-excel`, `pdf-to-powerpoint`, `word-to-pdf`, `html-to-pdf`, `pdf-to-markdown` | `libreoffice`, `puppeteer`, `pdf-parse` | **UNVERIFIED** | Phase 6 (Document Conversion Pipeline) |
-| **Image & Raster Tools** | `pdf-to-jpg`, `pdf-to-png`, `jpg-to-pdf`, `scan-to-pdf`, `ocr-pdf` | `puppeteer`, `sharp`, `tesseract.js` | **UNVERIFIED** | Phase 7 (Raster & OCR Pipeline) |
-| **Canvas & Interactive Tools** | `edit-pdf`, `sign-pdf`, `compare-pdf`, `redact-pdf`, `crop-pdf`, `pdf-forms` | Canvas + `pdf-lib` | **AUDIT / UNVERIFIED** | Phase 5 (Editor Modularization & Testing) |
-| **AI Intelligence** | `ai-summarizer`, `translate-pdf`, `chat-with-pdf` | `openai` API | **UNVERIFIED** | Phase 8 (AI Engine Integration) |
+| **Canvas & Interactive Tools** | `edit-pdf`, `sign-pdf`, `compare-pdf`, `redact-pdf`, `crop-pdf`, `pdf-forms` | Canvas + `@cantoo/pdf-lib` | **SCHEDULED** | Phase 5 (Editor Modularization & Testing) |
+| **Office & Format Conversions** | `pdf-to-word`, `pdf-to-excel`, `pdf-to-powerpoint`, `word-to-pdf`, `html-to-pdf`, `pdf-to-markdown` | `libreoffice`, `puppeteer`, `pdf-parse` | **SCHEDULED** | Phase 6 (Document Conversion Pipeline) |
+| **Image & Raster Tools** | `pdf-to-jpg`, `pdf-to-png`, `jpg-to-pdf`, `scan-to-pdf`, `ocr-pdf` | `puppeteer`, `sharp`, `tesseract.js` | **SCHEDULED** | Phase 7 (Raster & OCR Pipeline) |
+| **AI Intelligence** | `ai-summarizer`, `translate-pdf`, `chat-with-pdf` | `openai` API | **SCHEDULED** | Phase 8 (AI Engine Integration) |
+
+---
+
+## 4. Static & Contract Verification (PASS)
 
 ---
 

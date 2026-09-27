@@ -2,14 +2,13 @@ process.env.NODE_ENV = "test";
 import fs from "fs";
 import path from "path";
 import http from "http";
-import jwt from "jsonwebtoken";
+import { sessionService } from "../src/modules/auth/session.service";
 import { PDFDocument, rgb, StandardFonts } from "@cantoo/pdf-lib";
 import { prisma } from "../src/common/prisma";
 import { app } from "../src/server";
 
 let BASE_URL = "http://localhost:3001";
 let serverInstance: http.Server | null = null;
-const JWT_SECRET = process.env.JWT_SECRET || "super-secret-jwt-key-replace-in-production";
 
 const userA = { id: "user_a_repair_phase4", name: "User A (Repair)", email: "user_a_repair@test.local" };
 const userB = { id: "user_b_repair_phase4", name: "User B (Repair)", email: "user_b_repair@test.local" };
@@ -55,8 +54,10 @@ async function ensureTestUsers() {
     }
     u.id = user.id;
   }
-  tokenA = jwt.sign({ id: userA.id, email: userA.email }, JWT_SECRET, { expiresIn: "1h" });
-  tokenB = jwt.sign({ id: userB.id, email: userB.email }, JWT_SECRET, { expiresIn: "1h" });
+  const sA = await sessionService.createSession(userA.id);
+  tokenA = sA.rawToken;
+  const sB = await sessionService.createSession(userB.id);
+  tokenB = sB.rawToken;
 }
 
 async function generateValidPdf(pageCount: number, label: string): Promise<Buffer> {
@@ -374,6 +375,7 @@ async function runTests() {
   if (passed !== total) {
     process.exit(1);
   }
+  process.exit(0);
 }
 
 runTests().catch((err) => {

@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import multer from "multer";
 import { AppError } from "../common/errors/AppError";
 import { sendError } from "../common/responses/apiResponse";
+import { logger } from "../common/logger";
 
 export const errorMiddleware = (
   err: any,
@@ -18,7 +19,7 @@ export const errorMiddleware = (
   // 2. Multer Upload Errors
   if (err instanceof multer.MulterError) {
     if (err.code === "LIMIT_FILE_SIZE") {
-      sendError(res, "FILE_TOO_LARGE", "File exceeds the allowed size.", 400);
+      sendError(res, "FILE_TOO_LARGE", "File exceeds the allowed size.", 413);
       return;
     }
     if (err.code === "LIMIT_UNEXPECTED_FILE") {
@@ -45,8 +46,15 @@ export const errorMiddleware = (
     return;
   }
 
-  // 5. Unhandled / Server Errors
-  console.error("Unhandled Error:", err);
+  // 5. Database / Prisma Internal Errors (C7: prevent leaking DB schema/errors)
+  if (err?.name?.includes("Prisma") || (typeof err?.code === "string" && err.code.startsWith("P2"))) {
+    logger.error("Internal database error.", "HTTP");
+    sendError(res, "DATABASE_ERROR", "A database error occurred. Please try again later.", 500);
+    return;
+  }
+
+  // 6. Unhandled / Server Errors
+  logger.error("Unhandled server error.", "HTTP");
   const statusCode = err.status || err.statusCode || 500;
   const message = statusCode === 500 && process.env.NODE_ENV === "production"
     ? "An unexpected internal server error occurred."

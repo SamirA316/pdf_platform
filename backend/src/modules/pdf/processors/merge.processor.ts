@@ -4,10 +4,13 @@ import crypto from "crypto";
 import { PDFDocument } from "pdf-lib";
 import { File as PrismaFile } from "@prisma/client";
 import { prisma } from "../../../common/prisma";
+import { filesService } from "../../files/files.service";
+import { storageService } from "../../files/storage.service";
 import {
   ProcessingFailedError,
   FileNotFoundError,
 } from "../../../common/errors/AppError";
+import { logger } from "../../../common/logger";
 
 export interface IMergeJobParams {
   jobId: string;
@@ -60,7 +63,7 @@ export class MergeProcessor {
     }
 
     // 2. Resolve safe physical paths
-    const uploadBase = path.resolve(process.cwd(), "uploads");
+    const uploadBase = storageService.getStorageRoot();
     const physicalPaths: string[] = [];
 
     for (const f of orderedFiles) {
@@ -79,10 +82,7 @@ export class MergeProcessor {
     }
 
     // 3. Prepare user output directory
-    const userDir = path.join(uploadBase, "users", userId);
-    if (!fs.existsSync(userDir)) {
-      fs.mkdirSync(userDir, { recursive: true });
-    }
+    const userDir = storageService.getUserStorageDir(userId);
 
     const randomHex = crypto.randomBytes(8).toString("hex");
     const outputFilename = `file_${randomHex}.pdf`;
@@ -90,7 +90,7 @@ export class MergeProcessor {
     const storageKey = `users/${userId}/${outputFilename}`;
 
     try {
-      console.log(`[JOB] Processing ${jobId}: Merging ${orderedFiles.length} files`);
+      logger.info(`[JOB] Processing ${jobId}: Merging ${orderedFiles.length} files`, "JOB");
 
       const mergedPdf = await PDFDocument.create();
       let totalPageCount = 0;
@@ -121,19 +121,17 @@ export class MergeProcessor {
 
       const outputSize = Buffer.byteLength(mergedPdfBytes);
 
-      // 4. Record new output File in database
-      const outputFile = await prisma.file.create({
-        data: {
-          userId,
-          originalName: outputName,
-          storageKey,
-          mimeType: "application/pdf",
-          size: outputSize,
-          status: "READY",
-        },
-      });
+      // 4. Record new output File in database with atomic quota enforcement
+      const outputFile = await filesService.createFile(
+        userId,
+        outputName,
+        storageKey,
+        "application/pdf",
+        outputSize,
+        jobId
+      );
 
-      console.log(`[JOB] Completed ${jobId}: Created merged output file ${outputFile.id} (${totalPageCount} pages, ${outputSize} bytes)`);
+      logger.info(`[JOB] Completed ${jobId}: Created merged output file ${outputFile.id} (${totalPageCount} pages, ${outputSize} bytes)`, "JOB");
 
       return {
         outputFileId: outputFile.id,
@@ -144,15 +142,19 @@ export class MergeProcessor {
         },
       };
     } catch (err: any) {
-      console.error(`[JOB] Failed ${jobId}:`, err.message || err);
+      logger.error(`PDF job ${jobId} failed.`, "JOB");
 
       // Clean up orphaned partial output file on disk
       if (fs.existsSync(physicalOutputPath)) {
         try {
           await fs.promises.unlink(physicalOutputPath);
-        } catch (unlinkErr) {
-          console.warn("Failed to clean up partial output file:", unlinkErr);
+        } catch {
+          logger.warn("[JOB] Failed to clean up partial output file.", "JOB");
         }
+      }
+
+      if (err.code === "STORAGE_QUOTA_EXCEEDED" || err.code === "PAYLOAD_TOO_LARGE") {
+        throw err;
       }
 
       throw new ProcessingFailedError("We couldn't merge these PDFs. Please try again.");

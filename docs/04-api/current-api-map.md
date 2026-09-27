@@ -26,7 +26,19 @@ The primary, forward-looking API surface built on a clean modular architecture:
 | `PATCH` | `/api/v1/files/:id` | Rename original document | Yes (Strict) | JSON `{ name: string }` | `{ file: IFileDto }` | `FILE_RENAME_INVALID`, `FILE_NOT_FOUND` |
 | `DELETE` | `/api/v1/files/:id` | Delete DB record & disk file | Yes (Strict) | None | `{ message: string }` | `FILE_NOT_FOUND`, `FILE_DELETE_FAILED` |
 
-- **`/api/v1/jobs` (Phase 3 & Phase 4.1 - OPERATIONAL ✅)**: Asynchronous PDF processing state machine (`QUEUED` ➔ `PROCESSING` ➔ `COMPLETED` / `FAILED` / `CANCELLED`) with atomic concurrency control, file cleanup, and active processors for `compress-pdf` (Phase 3) and `merge-pdf` (Phase 4.1).
+- **`/api/v1/jobs` (Phase 3 & Phase 4.1–4.11 - OPERATIONAL ✅)**: Asynchronous PDF processing state machine (`QUEUED` ➔ `PROCESSING` ➔ `COMPLETED` / `FAILED` / `CANCELLED`) with atomic concurrency control, file cleanup, and active processors for all Phase 4 core tools:
+  - `compress-pdf` (Phase 3)
+  - `merge-pdf` (Phase 4.1)
+  - `split-pdf` (Phase 4.2)
+  - `rotate-pdf` (Phase 4.3)
+  - `organize-pdf` (Phase 4.4)
+  - `resize-pdf` (Phase 4.5)
+  - `watermark` (Phase 4.6)
+  - `page-numbers` (Phase 4.7)
+  - `protect-pdf` (Phase 4.8 - AES-256 Verified)
+  - `unlock-pdf` (Phase 4.9)
+  - `repair-pdf` (Phase 4.10 - Multi-tier)
+  - `pdf-to-pdfa` (Phase 4.11 - ISO 19005 Level B with embedded ICC Profile & deep AST validation)
 
 | Method | Endpoint | Description | Auth Required | Request Payload | Response Data | Error Codes |
 |---|---|---|---|---|---|---|
@@ -36,23 +48,43 @@ The primary, forward-looking API surface built on a clean modular architecture:
 | `POST` | `/api/v1/jobs/:jobId/cancel` | Cancel active job | Yes (Strict) | None | `{ job: IJobDto }` | `JOB_NOT_FOUND`, `INVALID_JOB_STATUS` |
 | `DELETE` | `/api/v1/jobs/:jobId` | Delete job from history | Yes (Strict) | None | `{ message: string }` | `JOB_NOT_FOUND`, `INVALID_JOB_STATUS` |
 
+- **`/api/v1/editor` (Phase 5.1 - OPERATIONAL & VERIFIED ✅)**: Interactive PDF Editor foundation, capability discovery, and export manifest validation.
+
+| Method | Endpoint | Description | Auth Required | Request Payload | Response Data | Error Codes |
+|---|---|---|---|---|---|---|
+| `GET` | `/api/v1/editor` | Get editor foundation status & capabilities | No | None | `{ module, phase, status, capabilities }` | None |
+| `POST` | `/api/v1/editor/validate` | Validate editor export manifest schema | No | JSON `IEditorExportPayload` | `{ valid, fileId, pageCount, totalObjects }` | `INVALID_EDITOR_PAYLOAD` |
+
 > [!NOTE]
 > **Sequential Modernization Plan**:
 > - **Phase 1**: API v1 Architecture & Foundation (COMPLETE ✅)
 > - **Phase 2**: File Management (`/api/v1/files`) (COMPLETE ✅)
 > - **Phase 3**: Job Processing System (`/api/v1/jobs`) (COMPLETE ✅)
-> - **Phase 4**: PDF Core Tools Migration (`/api/v1/jobs`):
+> - **Phase 4**: PDF Core Tools Migration (`/api/v1/jobs`) (COMPLETE & VERIFIED ✅):
 >   - **Phase 4.1**: Merge PDF (`merge-pdf`) (COMPLETE ✅)
->   - **Phase 4.2**: Split PDF (`split-pdf`) (NEXT)
->   - **Phase 4.3**: Rotate PDF (`rotate-pdf`)
->   - **Phase 4.4**: Organize PDF (`organize-pdf`)
-> - **Phase 5**: Editor & Annotations (`/api/v1/editor`)
-> - **Phase 6**: Office & Conversions
-> - **Phase 7**: OCR Pipeline (`/api/v1/ocr`)
-> - **Phase 8**: AI Services (`/api/v1/ai`)
-> - **Phase 9**: Usage & Rate Limiting (`/api/v1/usage`)
-> - **Phase 10**: Billing & Subscriptions (`/api/v1/billing`)
-> - **Phase 11**: Admin & System Controls (`/api/v1/admin`)
+>   - **Phase 4.2**: Split PDF (`split-pdf`) (COMPLETE ✅)
+>   - **Phase 4.3**: Rotate PDF (`rotate-pdf`) (COMPLETE ✅)
+>   - **Phase 4.4**: Organize PDF (`organize-pdf`) (COMPLETE ✅)
+>   - **Phase 4.5**: Resize PDF (`resize-pdf`) (COMPLETE ✅)
+>   - **Phase 4.6**: Watermark PDF (`watermark`) (COMPLETE ✅)
+>   - **Phase 4.7**: Page Numbers (`page-numbers`) (COMPLETE ✅)
+>   - **Phase 4.8**: Protect PDF (`protect-pdf`) (COMPLETE & AES-256 VERIFIED ✅)
+>   - **Phase 4.9**: Unlock PDF (`unlock-pdf`) (COMPLETE ✅)
+>   - **Phase 4.10**: Repair PDF (`repair-pdf`) (COMPLETE ✅)
+>   - **Phase 4.11**: PDF to PDF/A (`pdf-to-pdfa`) (COMPLETE & ISO COMPLIANCE VERIFIED ✅)
+> - **Phase 5**: PDF Editor & Annotations (`/api/v1/editor`) (IN PROGRESS 🟡):
+>   - **Phase 5.1**: Editor Foundation (Architecture, Coordinates, Schemas, State & UI Scaffold) (COMPLETE & VERIFIED ✅)
+>   - **Phase 5.2**: PDF Viewer & Rendering (PDF.js, High-DPI, Cancellation & Live Thumbnails) (COMPLETE & VERIFIED ✅)
+>   - **Phase 5.3**: Page Navigation & Thumbnails (Bi-directional Scroll Sync, Jump & Keyboard) (COMPLETE & VERIFIED ✅)
+>   - **Phase 5.4**: Zoom, Pan & Page Rotation (Presets, Hand Tool, View Angle & Stability) (COMPLETE & VERIFIED ✅)
+>   - **Phase 5.5**: Text Tool (Inline Editing, Fonts, Styles & Alignment) (NEXT 🔜)
+>   - **Phase 5.6 to 5.20**: Editor Tools, Operations, Export & Freeze (SCHEDULED)
+> - **Phase 6**: Office & Conversions (SCHEDULED)
+> - **Phase 7**: OCR Pipeline (`/api/v1/ocr`) (SCHEDULED)
+> - **Phase 8**: AI Services (`/api/v1/ai`) (SCHEDULED)
+> - **Phase 9**: Usage & Rate Limiting (`/api/v1/usage`) (SCHEDULED)
+> - **Phase 10**: Billing & Subscriptions (`/api/v1/billing`) (SCHEDULED)
+> - **Phase 11**: Admin & System Controls (`/api/v1/admin`) (SCHEDULED)
 
 ### Legacy API (`/api/*`)
 - `/api/auth`

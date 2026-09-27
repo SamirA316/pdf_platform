@@ -8,7 +8,7 @@ import { CheckCircle2, AlertCircle, Eye, EyeOff } from "lucide-react";
 import { useDispatch } from "react-redux";
 import { login } from "@/store/slices/authSlice";
 import { Logo } from "@/components/shared/Logo";
-import { apiClient } from "@/lib/apiClient";
+import { loginUser } from "@/lib/api";
 
 export default function LoginPage() {
   const [formData, setFormData] = useState({ email: "", password: "" });
@@ -34,8 +34,8 @@ export default function LoginPage() {
     if (!formData.password) {
       newErrors.password = "Password is required";
       isValid = false;
-    } else if (formData.password.length < 6) {
-      newErrors.password = "Password must be at least 6 characters";
+    } else if (formData.password.length < 8) {
+      newErrors.password = "Password must be at least 8 characters";
       isValid = false;
     }
 
@@ -48,11 +48,11 @@ export default function LoginPage() {
     if (validate()) {
       setLoading(true);
       try {
-        const data = await apiClient("/api/auth/login", {
-          data: formData,
-        });
+        const data = await loginUser(formData);
 
-        dispatch(login(data.user));
+        if (data.user) {
+          dispatch(login(data.user));
+        }
         router.push("/");
       } catch (err) {
         if (err instanceof Error) {

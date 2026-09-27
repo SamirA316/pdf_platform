@@ -11,10 +11,10 @@ import {
 import Link from "next/link";
 import { getToolsByFilter } from "@/config/tools";
 
-const filters = ['All', 'Workflows', 'Organize PDF', 'Optimize PDF', 'Convert PDF', 'Edit PDF', 'PDF Security', 'PDF Intelligence'];
+const filters = ['Core Tools', 'Organize PDF', 'Optimize PDF', 'Convert PDF', 'PDF Security', 'Coming Soon'];
 
 export default function Home() {
-  const [activeFilter, setActiveFilter] = useState('All');
+  const [activeFilter, setActiveFilter] = useState('Core Tools');
 
   const filteredTools = getToolsByFilter(activeFilter);
 
@@ -87,6 +87,7 @@ export default function Home() {
                 color={tool.color}
                 bgColor={tool.bgColor}
                 badge={tool.badge}
+                status={tool.status}
               />
             ))}
           </div>
