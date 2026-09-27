@@ -1,18 +1,25 @@
 import { Router } from "express";
 import { sendSuccess } from "../../common/responses/apiResponse";
+import { requireStrictAuth, AuthRequest } from "../../middlewares/auth.middleware";
+import { filesService } from "../files/files.service";
 
 const router = Router();
 
 /**
- * Usage Module Foundation (/api/v1/usage)
- * User quotas, daily conversions, and tier rate-limit tracking foundation.
+ * GET /api/v1/usage
+ * Authenticated endpoint returning actual user storage usage, quota, and plan status.
  */
-router.get("/", (req, res) => {
-  sendSuccess(res, {
-    module: "usage",
-    status: "foundation",
-    description: "User quota and service usage tracking module foundation",
-  });
+router.get("/", requireStrictAuth, async (req: AuthRequest, res, next) => {
+  try {
+    const quota = await filesService.getUserStorageQuota(req.user!.id);
+    sendSuccess(res, {
+      storage: quota,
+      plan: "beta_free",
+      description: "QuickPDF Free Beta tier",
+    });
+  } catch (err) {
+    next(err);
+  }
 });
 
 export default router;

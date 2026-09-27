@@ -12,7 +12,6 @@ import {
   RefreshCw,
   FileText,
   AlertCircle,
-  Layers,
 } from "lucide-react";
 
 interface OrganizeConfigProps {

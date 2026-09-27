@@ -4,10 +4,15 @@ import crypto from "crypto";
 import { PDFDocument } from "pdf-lib";
 import { File as PrismaFile } from "@prisma/client";
 import { prisma } from "../../../common/prisma";
+import { filesService } from "../../files/files.service";
+import { storageService } from "../../files/storage.service";
+import { getMaxFileSizeBytes } from "../../files/files.constants";
 import {
   ProcessingFailedError,
   FileNotFoundError,
+  PayloadTooLargeError,
 } from "../../../common/errors/AppError";
+import { logger } from "../../../common/logger";
 
 export interface ISplitJobParams {
   jobId: string;
@@ -67,7 +72,7 @@ export class SplitProcessor {
     }
 
     // 2. Resolve safe physical path
-    const uploadBase = path.resolve(process.cwd(), "uploads");
+    const uploadBase = storageService.getStorageRoot();
     const physicalPath = path.resolve(uploadBase, dbFile.storageKey);
     const relativePath = path.relative(uploadBase, physicalPath);
 
@@ -80,16 +85,13 @@ export class SplitProcessor {
     }
 
     // 3. Prepare user output directory
-    const userDir = path.join(uploadBase, "users", userId);
-    if (!fs.existsSync(userDir)) {
-      fs.mkdirSync(userDir, { recursive: true });
-    }
+    const userDir = storageService.getUserStorageDir(userId);
 
     const createdPhysicalPaths: string[] = [];
     const createdFileIds: string[] = [];
 
     try {
-      console.log(`[JOB] Processing ${jobId}: Splitting file '${dbFile.originalName}' [mode: ${mode}]`);
+      logger.info(`[JOB] Processing ${jobId}: Splitting file '${dbFile.originalName}' [mode: ${mode}]`, "JOB");
 
       const inputBytes = await fs.promises.readFile(physicalPath);
       const srcDoc = await PDFDocument.load(inputBytes, { ignoreEncryption: true });
@@ -142,7 +144,14 @@ export class SplitProcessor {
 
       let totalOutputBytes = 0;
 
-      // 5. Generate each split PDF
+      // 5. Generate each split PDF to disk first
+      interface ISplitFileItem {
+        originalName: string;
+        storageKey: string;
+        outputSize: number;
+      }
+      const splitItems: ISplitFileItem[] = [];
+
       for (const plan of splitPlans) {
         const subDoc = await PDFDocument.create();
         const copiedPages = await subDoc.copyPages(srcDoc, plan.pageIndices);
@@ -162,26 +171,52 @@ export class SplitProcessor {
         }
 
         const outputSize = Buffer.byteLength(subPdfBytes);
+
+        // Validate each generated file against per-file maximum size limit before reservation
+        const maxFileSize = getMaxFileSizeBytes();
+        if (outputSize > maxFileSize) {
+          throw new PayloadTooLargeError(
+            `Generated file '${plan.originalName}' exceeds the maximum permitted size of ${maxFileSize} bytes.`
+          );
+        }
+
         totalOutputBytes += outputSize;
 
-        // Record in database with jobId relation
-        const createdRecord = await prisma.file.create({
-          data: {
-            userId,
-            originalName: plan.originalName,
-            storageKey,
-            mimeType: "application/pdf",
-            size: outputSize,
-            status: "READY",
-            jobId,
-          },
+        splitItems.push({
+          originalName: plan.originalName,
+          storageKey,
+          outputSize,
         });
-
-        createdFileIds.push(createdRecord.id);
       }
 
-      console.log(
-        `[JOB] Completed ${jobId}: Created ${createdFileIds.length} split files for user ${userId} (${totalOutputBytes} bytes total)`
+      // 6. Atomically reserve quota for all split files combined
+      let quotaReserved = false;
+      await filesService.reserveQuota(userId, totalOutputBytes);
+      quotaReserved = true;
+
+      // 7. Record all files in database with jobId relation
+      try {
+        for (const item of splitItems) {
+          const createdRecord = await filesService.createFileRecord(
+            userId,
+            item.originalName,
+            item.storageKey,
+            "application/pdf",
+            item.outputSize,
+            jobId
+          );
+          createdFileIds.push(createdRecord.id);
+        }
+      } catch (dbErr) {
+        if (quotaReserved) {
+          await filesService.releaseQuota(userId, totalOutputBytes).catch(() => {});
+        }
+        throw dbErr;
+      }
+
+      logger.info(
+        `[JOB] Completed ${jobId}: Created ${createdFileIds.length} split files for user ${userId} (${totalOutputBytes} bytes total)`,
+        "JOB"
       );
 
       return {
@@ -193,15 +228,15 @@ export class SplitProcessor {
         },
       };
     } catch (err: any) {
-      console.error(`[JOB] Failed ${jobId}:`, err.message || err);
+      logger.error(`PDF job ${jobId} failed.`, "JOB");
 
       // Clean up orphaned physical files
       for (const physPath of createdPhysicalPaths) {
         if (fs.existsSync(physPath)) {
           try {
             await fs.promises.unlink(physPath);
-          } catch (unlinkErr) {
-            console.warn(`Failed to clean up partial split file '${physPath}':`, unlinkErr);
+          } catch {
+            logger.warn("[JOB] Failed to clean up partial split file.", "JOB");
           }
         }
       }
@@ -212,9 +247,18 @@ export class SplitProcessor {
           await prisma.file.deleteMany({
             where: { id: { in: createdFileIds } },
           });
-        } catch (dbErr) {
-          console.warn("Failed to clean up partial split DB file records:", dbErr);
+        } catch {
+          logger.warn("[JOB] Failed to clean up partial split DB file records.", "JOB");
         }
+      }
+
+      if (
+        err.code === "STORAGE_QUOTA_EXCEEDED" ||
+        err.code === "PAYLOAD_TOO_LARGE" ||
+        err.code === "FILE_TOO_LARGE" ||
+        err.statusCode === 413
+      ) {
+        throw err;
       }
 
       throw new ProcessingFailedError("We couldn't split this PDF. Please try again.");

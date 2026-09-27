@@ -1,71 +1,67 @@
 import { Navbar } from "@/components/shared/Navbar";
 import { Footer } from "@/components/shared/Footer";
 import { Button } from "@/components/ui/button";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, ShieldCheck, Zap } from "lucide-react";
 import Link from "next/link";
 
 export default function PricingPage() {
   return (
     <div className="flex flex-col min-h-screen">
       <Navbar />
-      
+
       <main className="flex-1 bg-secondary/10">
         <section className="py-24 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto text-center">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-semibold mb-6">
+            <Zap className="w-3.5 h-3.5" /> Public Beta Release
+          </div>
           <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-foreground mb-6">
-            Simple, transparent pricing
+            Free During Beta
           </h1>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-16">
-            Choose the perfect plan for your document needs. No hidden fees.
+            Full access to all 12 essential PDF manipulation tools with zero subscription fees during our public beta.
           </p>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto text-left">
-            {/* Free Plan */}
-            <div className="bg-card border border-border p-8 rounded-3xl shadow-sm flex flex-col">
-              <h3 className="text-xl font-semibold mb-2">Free</h3>
-              <div className="text-4xl font-bold mb-6">₹0<span className="text-lg text-muted-foreground font-normal">/mo</span></div>
-              <ul className="space-y-4 mb-8 flex-1 text-muted-foreground text-sm">
-                <li className="flex items-center"><CheckCircle2 className="w-4 h-4 mr-2 text-primary" /> Basic PDF tools</li>
-                <li className="flex items-center"><CheckCircle2 className="w-4 h-4 mr-2 text-primary" /> Basic Image tools</li>
-                <li className="flex items-center"><CheckCircle2 className="w-4 h-4 mr-2 text-primary" /> Limited daily usage (5 files)</li>
-                <li className="flex items-center"><CheckCircle2 className="w-4 h-4 mr-2 text-primary" /> Max file size: 100MB</li>
-                <li className="flex items-center"><CheckCircle2 className="w-4 h-4 mr-2 text-primary" /> Standard processing speed</li>
-              </ul>
-              <Link href="/signup">
-                <Button variant="outline" className="w-full rounded-full border-border">Get Started</Button>
-              </Link>
-            </div>
-            
-            {/* Pro Plan */}
-            <div className="bg-primary/5 border-2 border-primary p-8 rounded-3xl shadow-md flex flex-col relative">
-              <div className="absolute top-0 right-8 -translate-y-1/2 bg-primary text-primary-foreground px-3 py-1 text-xs font-bold rounded-full">RECOMMENDED</div>
-              <h3 className="text-xl font-semibold mb-2">Pro</h3>
-              <div className="text-4xl font-bold mb-6">₹199<span className="text-lg text-muted-foreground font-normal">/mo</span></div>
+
+          <div className="max-w-md mx-auto text-left">
+            {/* Beta Edition Plan */}
+            <div className="bg-card border-2 border-primary p-8 rounded-3xl shadow-lg flex flex-col relative">
+              <div className="absolute top-0 right-8 -translate-y-1/2 bg-primary text-primary-foreground px-3 py-1 text-xs font-bold rounded-full">
+                100% FREE
+              </div>
+              <h3 className="text-2xl font-bold mb-2">Beta Edition</h3>
+              <p className="text-sm text-muted-foreground mb-6">Complete suite of 12 core PDF tools for personal and professional use.</p>
+              <div className="text-5xl font-extrabold mb-8 text-foreground">
+                ₹0<span className="text-lg text-muted-foreground font-normal"> / forever free</span>
+              </div>
               <ul className="space-y-4 mb-8 flex-1 text-foreground text-sm font-medium">
-                <li className="flex items-center"><CheckCircle2 className="w-4 h-4 mr-2 text-primary" /> Everything in Free</li>
-                <li className="flex items-center"><CheckCircle2 className="w-4 h-4 mr-2 text-primary" /> Unlimited daily usage</li>
-                <li className="flex items-center"><CheckCircle2 className="w-4 h-4 mr-2 text-primary" /> Batch processing</li>
-                <li className="flex items-center"><CheckCircle2 className="w-4 h-4 mr-2 text-primary" /> Max file size: 100MB</li>
-                <li className="flex items-center"><CheckCircle2 className="w-4 h-4 mr-2 text-primary" /> Ad-free experience</li>
-                <li className="flex items-center"><CheckCircle2 className="w-4 h-4 mr-2 text-primary" /> Priority processing</li>
+                <li className="flex items-center">
+                  <CheckCircle2 className="w-5 h-5 mr-3 text-primary flex-shrink-0" />
+                  <span>12 Core PDF Tools (Merge, Split, Compress, Rotate, etc.)</span>
+                </li>
+                <li className="flex items-center">
+                  <CheckCircle2 className="w-5 h-5 mr-3 text-primary flex-shrink-0" />
+                  <span>Up to 50MB single file upload limit</span>
+                </li>
+                <li className="flex items-center">
+                  <CheckCircle2 className="w-5 h-5 mr-3 text-primary flex-shrink-0" />
+                  <span>100MB persistent user storage quota</span>
+                </li>
+                <li className="flex items-center">
+                  <ShieldCheck className="w-5 h-5 mr-3 text-primary flex-shrink-0" />
+                  <span>Strict zero-leakage ownership & encrypted sessions</span>
+                </li>
+                <li className="flex items-center">
+                  <CheckCircle2 className="w-5 h-5 mr-3 text-primary flex-shrink-0" />
+                  <span>Batch processing and fast client streaming</span>
+                </li>
+                <li className="flex items-center">
+                  <CheckCircle2 className="w-5 h-5 mr-3 text-primary flex-shrink-0" />
+                  <span>No credit card or payment required</span>
+                </li>
               </ul>
               <Link href="/signup">
-                <Button className="w-full rounded-full">Upgrade to Pro</Button>
-              </Link>
-            </div>
-            
-            {/* AI Pro Plan */}
-            <div className="bg-card border border-border p-8 rounded-3xl shadow-sm flex flex-col">
-              <h3 className="text-xl font-semibold mb-2">AI Pro</h3>
-              <div className="text-4xl font-bold mb-6">₹399<span className="text-lg text-muted-foreground font-normal">/mo</span></div>
-              <ul className="space-y-4 mb-8 flex-1 text-muted-foreground text-sm">
-                <li className="flex items-center"><CheckCircle2 className="w-4 h-4 mr-2 text-primary" /> Everything in Pro</li>
-                <li className="flex items-center"><CheckCircle2 className="w-4 h-4 mr-2 text-primary" /> AI PDF Summaries</li>
-                <li className="flex items-center"><CheckCircle2 className="w-4 h-4 mr-2 text-primary" /> Chat with PDF (100 msgs/day)</li>
-                <li className="flex items-center"><CheckCircle2 className="w-4 h-4 mr-2 text-primary" /> AI Data Extraction</li>
-                <li className="flex items-center"><CheckCircle2 className="w-4 h-4 mr-2 text-primary" /> PDF Translation</li>
-              </ul>
-              <Link href="/signup">
-                <Button variant="outline" className="w-full rounded-full border-border">Get AI Pro</Button>
+                <Button className="w-full rounded-full py-6 text-base font-semibold">
+                  Get Started Free
+                </Button>
               </Link>
             </div>
           </div>

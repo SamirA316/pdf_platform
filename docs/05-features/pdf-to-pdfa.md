@@ -20,23 +20,27 @@ Input PDF
    ↓
 Validate Unencrypted Status (PDF/A strictly forbids encryption)
    ↓
-External Ghostscript PDF/A Check (if available in environment)
+Stage 1: External Ghostscript PDF/A Distillation (if available in environment)
    ↓ fails / not installed
-Native Archival Engine:
+Stage 2: Native Archival Engine:
    - Copies clean page streams into ISO-standardized container
    - Embeds XMP identification stream (<pdfaid:part> & <pdfaid:conformance>B</pdfaid:conformance>)
-   - Registers standard sRGB OutputIntent dictionary in Document Catalog
+   - Embeds authentic sRGB IEC61966-2.1 ICC color profile stream (548 bytes, D50 illuminant, acsp signature)
+   - Registers OutputIntent dictionary with DestOutputProfile stream ref in Document Catalog
    - Re-indexes object catalog with uncompressed object streams
    ↓
-Strict Output Validation:
-   - PDF signature %PDF-
-   - Parsable by PDF reader with > 0 pages
-   - XMP metadata stream verified
-   - OutputIntent verified
+Stage 3: Independent Deep-Structural AST Conformance Validation:
+   - Validates unencrypted state (doc.isEncrypted === false)
+   - Inspects Catalog /Metadata stream and validates XML tree
+   - Inspects Catalog /OutputIntents array, confirms S === /GTS_PDFA1
+   - Inspects /DestOutputProfile stream and validates embedded ICC magic bytes ('acsp' at offset 36)
+   - Runs external validator (qpdf --check) if present
    ↓
-Save output in READY status & return outputFileId
+Save output in READY status & return outputFileId with compliance metrics
 ```
 
 ## 4. Security & Cleanup
 - Encrypted documents are strictly rejected upfront with `ENCRYPTED_PDF_REJECTED`.
 - Temporary outputs are securely unlinked upon any failure or cancellation.
+- Strict compliance validator prevents false-positive "fake success" output.
+

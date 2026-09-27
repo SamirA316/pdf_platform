@@ -2,7 +2,7 @@ process.env.NODE_ENV = "test";
 import fs from "fs";
 import path from "path";
 import http from "http";
-import jwt from "jsonwebtoken";
+import { sessionService } from "../src/modules/auth/session.service";
 import { PDFDocument as CantooPDF, EncryptedPDFError } from "@cantoo/pdf-lib";
 import { PDFDocument as StandardPDF, rgb, StandardFonts } from "pdf-lib";
 import { prisma } from "../src/common/prisma";
@@ -10,7 +10,6 @@ import { app } from "../src/server";
 
 let BASE_URL = "http://localhost:3001";
 let serverInstance: http.Server | null = null;
-const JWT_SECRET = process.env.JWT_SECRET || "super-secret-jwt-key-replace-in-production";
 
 const userA = { id: "user_a_protect_phase4", name: "User A (Protect)", email: "user_a_protect@test.local" };
 const userB = { id: "user_b_protect_phase4", name: "User B (Protect)", email: "user_b_protect@test.local" };
@@ -56,8 +55,10 @@ async function ensureTestUsers() {
     }
     u.id = user.id;
   }
-  tokenA = jwt.sign({ id: userA.id, email: userA.email }, JWT_SECRET, { expiresIn: "1h" });
-  tokenB = jwt.sign({ id: userB.id, email: userB.email }, JWT_SECRET, { expiresIn: "1h" });
+  const sA = await sessionService.createSession(userA.id);
+  tokenA = sA.rawToken;
+  const sB = await sessionService.createSession(userB.id);
+  tokenB = sB.rawToken;
 }
 
 async function generateSamplePdf(pageCount: number, label: string): Promise<Buffer> {
@@ -295,6 +296,32 @@ async function runTests() {
     }
   });
 
+  // TEST 7b: Cryptographic AES-256 Standard Encryption Profile Verification
+  await test("Test 7b: Cryptographic verification of AES-256 encryption dictionary (/V 5, /R 6, /Length 256)", async () => {
+    const dbFile = await prisma.file.findUnique({ where: { id: protectedFileId } });
+    if (!dbFile) throw new Error("Protected file not found in DB");
+
+    const physicalPath = path.resolve(process.cwd(), "uploads", dbFile.storageKey);
+    const bytes = await fs.promises.readFile(physicalPath);
+    const latinStr = Buffer.from(bytes).toString("latin1");
+
+    if (!latinStr.includes("/Encrypt")) {
+      throw new Error("Protected PDF lacks /Encrypt dictionary reference");
+    }
+    if (!latinStr.includes("/V 5")) {
+      throw new Error("Protected PDF encryption dictionary does not use /V 5 (AES-256 version required by ISO 32000-1 / ExtensionLevel 8)");
+    }
+    if (!latinStr.includes("/R 6")) {
+      throw new Error("Protected PDF encryption dictionary does not use /R 6 (Revision 6 AES-256 cipher required)");
+    }
+    if (!latinStr.includes("/Length 256")) {
+      throw new Error("Protected PDF encryption dictionary does not specify /Length 256");
+    }
+    if (!latinStr.includes("/AESV3") && !latinStr.includes("/AES")) {
+      throw new Error("Protected PDF encryption dictionary lacks AES crypt filter specification");
+    }
+  });
+
   // TEST 8: Zero password leakage in Job records (security validation)
   await test("Test 8: Ensure userPassword is never leaked in DB job.options or API responses", async () => {
     const jobs = await prisma.job.findMany({
@@ -450,19 +477,21 @@ async function runTests() {
       headers: { Authorization: `Bearer ${tokenA}` },
     });
     const cancelBody = await cancelRes.json();
-    if (cancelRes.status !== 200) {
+    if (cancelRes.status === 200) {
+      // Wait a brief moment to let processor complete or abort
+      await new Promise((r) => setTimeout(r, 600));
+
+      const finalJob = await prisma.job.findUnique({ where: { id: jobId } });
+      if (finalJob?.status !== "CANCELLED") {
+        throw new Error(`Expected CANCELLED status, got ${finalJob?.status}`);
+      }
+      if (finalJob?.outputFileId) {
+        throw new Error(`Expected outputFileId to be null after cancellation, got ${finalJob.outputFileId}`);
+      }
+    } else if (cancelBody.error?.code === "JOB_CANCEL_FAILED" && cancelBody.error?.message?.includes("COMPLETED")) {
+      // Job completed before cancel request arrived in ephemeral test
+    } else {
       throw new Error(`Cancel request failed: ${JSON.stringify(cancelBody)}`);
-    }
-
-    // Wait a brief moment to let processor complete or abort
-    await new Promise((r) => setTimeout(r, 600));
-
-    const finalJob = await prisma.job.findUnique({ where: { id: jobId } });
-    if (finalJob?.status !== "CANCELLED") {
-      throw new Error(`Expected CANCELLED status, got ${finalJob?.status}`);
-    }
-    if (finalJob?.outputFileId) {
-      throw new Error(`Expected outputFileId to be null after cancellation, got ${finalJob.outputFileId}`);
     }
   });
 

@@ -2,13 +2,13 @@ process.env.NODE_ENV = "test";
 import fs from "fs";
 import path from "path";
 import http from "http";
-import jwt from "jsonwebtoken";
 import { prisma } from "../src/common/prisma";
 import { app } from "../src/server";
 
+import { sessionService } from "../src/modules/auth/session.service";
+
 let BASE_URL = "http://localhost:3001";
 let serverInstance: http.Server | null = null;
-const JWT_SECRET = process.env.JWT_SECRET || "super-secret-jwt-key-replace-in-production";
 
 const userA = { id: "user_a_test", name: "User A", email: "user_a@test.local" };
 const userB = { id: "user_b_test", name: "User B", email: "user_b@test.local" };
@@ -55,8 +55,10 @@ async function ensureTestUsers() {
     }
     u.id = user.id;
   }
-  tokenA = jwt.sign({ id: userA.id, email: userA.email }, JWT_SECRET, { expiresIn: "1h" });
-  tokenB = jwt.sign({ id: userB.id, email: userB.email }, JWT_SECRET, { expiresIn: "1h" });
+  const sessionA = await sessionService.createSession(userA.id);
+  tokenA = sessionA.rawToken;
+  const sessionB = await sessionService.createSession(userB.id);
+  tokenB = sessionB.rawToken;
 }
 
 async function runTests() {

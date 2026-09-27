@@ -1,11 +1,14 @@
 import { Request, Response, NextFunction } from "express";
-import jwt from "jsonwebtoken";
+import crypto from "crypto";
 import { prisma } from "../common/prisma";
 import { UnauthorizedError } from "../common/errors/AppError";
-
-const JWT_SECRET = process.env.JWT_SECRET || "super-secret-jwt-key-replace-in-production";
+import { envConfig } from "../common/config";
+import { sessionService } from "../modules/auth/session.service";
+import { logger } from "../common/logger";
 
 export const GUEST_USER_ID = "guest-user-account";
+export const SESSION_COOKIE_NAME =
+  envConfig.NODE_ENV === "production" ? "__Host-pdf_session" : "pdf_session";
 
 let guestUserEnsured = false;
 async function ensureGuestUser() {
@@ -13,87 +16,120 @@ async function ensureGuestUser() {
   try {
     const existing = await prisma.user.findUnique({ where: { id: GUEST_USER_ID } });
     if (!existing) {
+      // Use an unguessable 64-character random string so the guest account cannot be logged into directly
+      const unguessablePassword = crypto.randomBytes(32).toString("hex");
       await prisma.user.create({
         data: {
           id: GUEST_USER_ID,
           name: "Guest User",
           email: "guest@pdfplatform.local",
-          password: "guest-password-hash",
+          password: unguessablePassword,
           isVerified: true,
         },
       });
     }
     guestUserEnsured = true;
-  } catch (err) {
-    console.error("Failed to ensure guest user in DB:", err);
+  } catch {
+    logger.error("Failed to ensure guest user in DB.", "AUTH");
   }
 }
 
 export interface AuthRequest extends Request {
-  userId?: string;
+  userId?: string | undefined;
+  sessionId?: string | undefined;
+  sessionToken?: string | undefined;
+  user?: { id: string } | undefined;
 }
 
 /**
- * requireAuth: Authenticates logged-in users or transparently assigns a guest user ID
- * so public PDF tools (Convert, Merge, Protect, Unlock, etc.) work without forced login.
+ * Extracts session or bearer token from cookies or Authorization header.
+ * Disallows query-string token authentication to avoid URL token leaks.
+ */
+export function extractAuthToken(req: Request): string | null {
+  let token =
+    req.cookies?.[SESSION_COOKIE_NAME] ||
+    req.cookies?.pdf_session ||
+    req.cookies?.token;
+
+  if (!token && req.headers.authorization && req.headers.authorization.startsWith("Bearer ")) {
+    token = req.headers.authorization.split(" ")[1];
+  }
+
+  return token || null;
+}
+
+/**
+ * requireAuth: Authenticates logged-in users via server-side session or transparently
+ * assigns a guest user ID for legacy public PDF tools.
  */
 export const requireAuth = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    let token = req.cookies?.token;
-
-    if (!token && req.headers.authorization && req.headers.authorization.startsWith("Bearer ")) {
-      token = req.headers.authorization.split(" ")[1];
-    }
-
-    if (!token && req.query?.token) {
-      token = req.query.token as string;
-    }
+    const token = extractAuthToken(req);
 
     if (token) {
-      try {
-        const decoded = jwt.verify(token, JWT_SECRET) as { id: string };
-        req.userId = decoded.id;
-        next();
-        return;
-      } catch {
-        // Fallback to guest if token expired or invalid
+      const sessionResult = await sessionService.validateSession(token);
+      if (sessionResult.valid && sessionResult.userId) {
+        req.userId = sessionResult.userId;
+        req.sessionId = sessionResult.sessionId;
+        req.sessionToken = token;
+        req.user = { id: sessionResult.userId };
+        return next();
       }
     }
 
     await ensureGuestUser();
     req.userId = GUEST_USER_ID;
+    req.user = { id: GUEST_USER_ID };
     next();
-  } catch (error) {
-    console.error("Auth middleware error:", error);
+  } catch {
+    logger.error("Auth middleware error.", "AUTH");
     res.status(500).json({ error: "Internal authentication error" });
   }
 };
 
 /**
- * requireStrictAuth: Strictly requires a valid JWT token.
- * Used for authenticated endpoints like account settings (/api/auth/me) and files (/api/v1/files).
+ * requireStrictAuth: Strictly requires an active, non-expired, non-revoked session.
+ * Tokens are accepted exclusively via HttpOnly cookie or Authorization Bearer header.
+ * Stateless JWT fallback is completely removed in Phase 2.4A.
  */
-export const requireStrictAuth = (req: AuthRequest, res: Response, next: NextFunction): void => {
+export const requireStrictAuth = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
   try {
-    let token = req.cookies?.token;
-
-    if (!token && req.headers.authorization && req.headers.authorization.startsWith("Bearer ")) {
-      token = req.headers.authorization.split(" ")[1];
-    }
-
-    if (!token && req.query?.token) {
-      token = req.query.token as string;
-    }
+    const token = extractAuthToken(req);
 
     if (!token) {
       return next(new UnauthorizedError("Authentication required.", "UNAUTHORIZED"));
     }
 
-    const decoded = jwt.verify(token, JWT_SECRET) as { id: string };
-    req.userId = decoded.id;
-    next();
+    const sessionResult = await sessionService.validateSession(token);
+
+    if (sessionResult.valid && sessionResult.userId) {
+      req.userId = sessionResult.userId;
+      req.sessionId = sessionResult.sessionId;
+      req.sessionToken = token;
+      req.user = { id: sessionResult.userId };
+      return next();
+    }
+
+    if (sessionResult.reason === "REVOKED") {
+      return next(
+        new UnauthorizedError("Session has been revoked. Please log in again.", "SESSION_REVOKED")
+      );
+    }
+
+    if (sessionResult.reason === "EXPIRED") {
+      return next(
+        new UnauthorizedError("Session has expired. Please log in again.", "SESSION_EXPIRED")
+      );
+    }
+
+    // Invalid or unknown session token
+    return next(new UnauthorizedError("Invalid or expired authentication session.", "UNAUTHORIZED"));
   } catch (error) {
-    return next(new UnauthorizedError("Invalid or expired authentication token.", "UNAUTHORIZED"));
+    return next(new UnauthorizedError("Invalid authentication session.", "UNAUTHORIZED"));
   }
 };
 

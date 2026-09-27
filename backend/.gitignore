@@ -1,12 +1,26 @@
-node_modules
-dist
+# Dependencies
+node_modules/
+
+# Build & Dist
+dist/
+*.tsbuildinfo
+
+# Environment
 .env
 .env.*
 !.env.example
+
+# Database files
 *.db
 *.db-journal
 *.db-shm
 *.db-wal
-*.log
-uploads/
+prisma/*.db
+prisma/*.db-journal
 
+# Logs
+*.log
+
+# Runtime Uploads & Generated files
+uploads/*
+!uploads/.gitkeep

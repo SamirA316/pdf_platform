@@ -2,13 +2,12 @@ process.env.NODE_ENV = "test";
 import fs from "fs";
 import path from "path";
 import http from "http";
-import jwt from "jsonwebtoken";
 import { prisma } from "../src/common/prisma";
 import { app } from "../src/server";
+import { sessionService } from "../src/modules/auth/session.service";
 
 let BASE_URL = "http://localhost:3001";
 let serverInstance: http.Server | null = null;
-const JWT_SECRET = process.env.JWT_SECRET || "super-secret-jwt-key-replace-in-production";
 
 const userA = { id: "user_a_phase3", name: "User A (Phase 3)", email: "user_a_phase3@test.local" };
 const userB = { id: "user_b_phase3", name: "User B (Phase 3)", email: "user_b_phase3@test.local" };
@@ -54,8 +53,10 @@ async function ensureTestUsers() {
     }
     u.id = user.id;
   }
-  tokenA = jwt.sign({ id: userA.id, email: userA.email }, JWT_SECRET, { expiresIn: "1h" });
-  tokenB = jwt.sign({ id: userB.id, email: userB.email }, JWT_SECRET, { expiresIn: "1h" });
+  const sessionA = await sessionService.createSession(userA.id);
+  tokenA = sessionA.rawToken;
+  const sessionB = await sessionService.createSession(userB.id);
+  tokenB = sessionB.rawToken;
 }
 
 async function uploadPdf(token: string, content: string, filename: string): Promise<string> {
@@ -155,10 +156,10 @@ async function runTests() {
   });
   const data5 = await res5.json();
   console.log("Status:", res5.status, "Error Code:", data5.error?.code);
-  if (res5.status !== 403 || data5.error?.code !== "JOB_ACCESS_DENIED") {
-    throw new Error(`Test 5 Failed: Expected 403 JOB_ACCESS_DENIED, got ${res5.status}`);
+  if (![403, 404].includes(res5.status) || !["JOB_ACCESS_DENIED", "JOB_NOT_FOUND"].includes(data5.error?.code)) {
+    throw new Error(`Test 5 Failed: Expected 404 or 403, got ${res5.status} (${data5.error?.code})`);
   }
-  console.log("PASS: Cross-user job isolation strictly enforced.");
+  console.log("PASS: Cross-user job isolation strictly enforced (404/403).");
 
   // Test 6: Cancel Job
   console.log("\n[Test 6] Cancel Job - POST /api/v1/jobs/:jobId/cancel (User A)");

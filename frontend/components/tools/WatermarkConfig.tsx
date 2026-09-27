@@ -10,7 +10,6 @@ import {
   Image as ImageIcon,
   ArrowRight,
   UploadCloud,
-  CheckCircle2,
   Compass,
   Palette,
 } from "lucide-react";
@@ -123,9 +122,10 @@ export function WatermarkConfig({ files, onProcess }: WatermarkConfigProps) {
           position,
           pages: parsedPages,
         });
-      } catch (err: any) {
+      } catch (err: unknown) {
         setIsUploadingImage(false);
-        setError(err.message || "Failed to upload watermark image. Please try again.");
+        const msg = err instanceof Error ? err.message : "Failed to upload watermark image. Please try again.";
+        setError(msg);
       }
     }
   };

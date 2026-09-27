@@ -48,7 +48,28 @@ export class ConflictError extends AppError {
 
 export class PayloadTooLargeError extends AppError {
   constructor(message: string = "File exceeds the allowed size.", code: string = "FILE_TOO_LARGE") {
+    super(message, 413, code);
+  }
+}
+
+export class StorageQuotaExceededError extends AppError {
+  constructor(message: string = "Storage quota exceeded.", code: string = "STORAGE_QUOTA_EXCEEDED") {
     super(message, 400, code);
+  }
+}
+
+export class InternalServerError extends AppError {
+  constructor(message: string = "Internal server error", code: string = "INTERNAL_SERVER_ERROR") {
+    super(message, 500, code);
+  }
+}
+
+export class EmailDispatchError extends AppError {
+  constructor(
+    message: string = "Failed to send email. Please try again later.",
+    code: string = "EMAIL_DISPATCH_FAILED"
+  ) {
+    super(message, 500, code);
   }
 }
 
@@ -56,6 +77,12 @@ export class PayloadTooLargeError extends AppError {
 
 export class FileRequiredError extends AppError {
   constructor(message: string = "A file is required.", code: string = "FILE_REQUIRED") {
+    super(message, 400, code);
+  }
+}
+
+export class EmptyFileError extends AppError {
+  constructor(message: string = "Uploaded file is empty (0 bytes).", code: string = "EMPTY_FILE") {
     super(message, 400, code);
   }
 }

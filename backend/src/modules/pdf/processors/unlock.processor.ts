@@ -3,11 +3,14 @@ import fs from "fs";
 import crypto from "crypto";
 import { PDFDocument, EncryptedPDFError } from "@cantoo/pdf-lib";
 import { prisma } from "../../../common/prisma";
+import { filesService } from "../../files/files.service";
+import { storageService } from "../../files/storage.service";
 import {
   ProcessingFailedError,
   FileNotFoundError,
   BadRequestError,
 } from "../../../common/errors/AppError";
+import { logger } from "../../../common/logger";
 
 export interface IUnlockJobParams {
   jobId: string;
@@ -57,7 +60,7 @@ export class UnlockProcessor {
     }
 
     // 2. Resolve safe physical path
-    const uploadBase = path.resolve(process.cwd(), "uploads");
+    const uploadBase = storageService.getStorageRoot();
     const physicalPath = path.resolve(uploadBase, dbFile.storageKey);
     const relativePath = path.relative(uploadBase, physicalPath);
 
@@ -70,10 +73,7 @@ export class UnlockProcessor {
     }
 
     // 3. Prepare user output directory
-    const userDir = path.join(uploadBase, "users", userId);
-    if (!fs.existsSync(userDir)) {
-      fs.mkdirSync(userDir, { recursive: true });
-    }
+    const userDir = storageService.getUserStorageDir(userId);
 
     const randomHex = crypto.randomBytes(8).toString("hex");
     const outputFilename = `file_${randomHex}.pdf`;
@@ -81,7 +81,7 @@ export class UnlockProcessor {
     const storageKey = `users/${userId}/${outputFilename}`;
 
     try {
-      console.log(`[JOB] Processing ${jobId}: Decrypting document '${dbFile.originalName}'`);
+      logger.info(`[JOB] Processing ${jobId}: Decrypting document '${dbFile.originalName}'`, "JOB");
 
       const inputBytes = await fs.promises.readFile(physicalPath);
 
@@ -129,20 +129,18 @@ export class UnlockProcessor {
       const baseNameWithoutExt = dbFile.originalName.replace(/\.pdf$/i, "");
       const outputOriginalName = `${baseNameWithoutExt}_unlocked.pdf`;
 
-      const newFile = await prisma.file.create({
-        data: {
-          userId,
-          storageKey,
-          originalName: outputOriginalName,
-          mimeType: "application/pdf",
-          size: outputStats.size,
-          status: "READY",
-          jobId,
-        },
-      });
+      const newFile = await filesService.createFile(
+        userId,
+        outputOriginalName,
+        storageKey,
+        "application/pdf",
+        outputStats.size,
+        jobId
+      );
 
-      console.log(
-        `[JOB] Completed ${jobId}: Unlocked PDF saved as '${outputOriginalName}' (${outputStats.size} bytes)`
+      logger.info(
+        `[JOB] Completed ${jobId}: Unlocked PDF saved as '${outputOriginalName}' (${outputStats.size} bytes)`,
+        "JOB"
       );
 
       return {
@@ -157,9 +155,12 @@ export class UnlockProcessor {
       if (fs.existsSync(physicalOutputPath)) {
         try {
           await fs.promises.unlink(physicalOutputPath);
-        } catch (cleanupErr: any) {
-          console.warn(`[JOB] Failed to unlink temp output '${physicalOutputPath}':`, cleanupErr.message);
+        } catch {
+          logger.warn("[JOB] Failed to unlink temporary output file.", "JOB");
         }
+      }
+      if (err.code === "STORAGE_QUOTA_EXCEEDED" || err.code === "PAYLOAD_TOO_LARGE") {
+        throw err;
       }
       if (err instanceof BadRequestError) {
         throw err;
