@@ -570,6 +570,7 @@ async function runTests() {
           inputFileIds: [fileA_5p],
           options: {
             mode: "every-page",
+            maxFileSizeBytes: 500,
           },
         }),
       });

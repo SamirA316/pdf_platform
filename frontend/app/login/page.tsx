@@ -77,7 +77,7 @@ export default function LoginPage() {
   };
 
   const handleSocialLogin = (provider: string) => {
-    alert(`${provider} login is coming soon! Please use email and password for now.`);
+    alert(`${provider} login is currently unavailable. Please use email and password.`);
   };
 
   return (

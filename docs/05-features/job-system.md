@@ -14,8 +14,8 @@ Provide an asynchronous job execution pattern for PDF platform tools, decoupling
    - `POST /api/v1/jobs/:jobId/cancel` (Cancellation of in-progress tasks with orphan file cleanup)
    - `DELETE /api/v1/jobs/:jobId` (History purging; active jobs in QUEUED/PROCESSING blocked)
 3. **Decoupled PDF Processor**:
-   - PoC implemented strictly for `compress-pdf`.
-   - `ALLOWED_TOOLS` strictly limited to `compress-pdf` in Phase 3. Other tools will be added incrementally in Phase 4.
+   - Supported across all 34 V1 architecture tools.
+   - `ALLOWED_TOOLS` strictly limited to implemented and verified V1 tools.
 4. **Lifecycle & Queue Architecture**:
    - In-process dispatch using `setImmediate`. Persistent queue (Redis/BullMQ) planned for future worker phase.
    - `EXPIRED` status reserved for future retention cleanup workers.

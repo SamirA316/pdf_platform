@@ -11,7 +11,7 @@ import {
 import Link from "next/link";
 import { getToolsByFilter } from "@/config/tools";
 
-const filters = ['Core Tools', 'Organize PDF', 'Optimize PDF', 'Convert PDF', 'PDF Security', 'Coming Soon'];
+const filters = ['Core Tools', 'Organize PDF', 'Optimize PDF', 'Convert PDF', 'PDF Security', 'AI PDF'];
 
 export default function Home() {
   const [activeFilter, setActiveFilter] = useState('Core Tools');

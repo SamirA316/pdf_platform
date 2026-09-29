@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Menu, X, ChevronDown, CheckCircle2, LogOut as LogOutIcon } from "lucide-react";
@@ -33,21 +33,22 @@ export function Navbar() {
 
   useEffect(() => { dispatch(checkAuth()); }, [dispatch]);
 
+  const showToast = useCallback((message: string, type: "login" | "logout") => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    const id = Date.now();
+    setToast({ id, message, type });
+    toastTimer.current = setTimeout(() => setToast(null), 2800);
+  }, []);
+
   // Detect auth state transitions → toast
   useEffect(() => {
     if (prevUserRef.current === undefined) { prevUserRef.current = user; return; }
     if (!prevUserRef.current && user) showToast(`Welcome back, ${user.name?.split(" ")[0] || ""}! 👋`, "login");
     else if (prevUserRef.current && !user) showToast("Logged out successfully", "logout");
     prevUserRef.current = user;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+  }, [user, showToast]);
 
-  const showToast = (message: string, type: "login" | "logout") => {
-    if (toastTimer.current) clearTimeout(toastTimer.current);
-    const id = Date.now();
-    setToast({ id, message, type });
-    toastTimer.current = setTimeout(() => setToast(null), 2800);
-  };
+
 
   const logout = () => {
     dispatch(logoutUser());
@@ -91,9 +92,6 @@ export function Navbar() {
                                       <Icon className="w-4 h-4 opacity-90 group-hover/item:opacity-100 group-hover/item:scale-110 transition-all duration-200" strokeWidth={2} />
                                     </div>
                                     <span className="text-[13px] font-semibold text-[#4A4A55] group-hover/item:text-[#111111] transition-colors whitespace-nowrap">{tool.title}</span>
-                                    {tool.status === "COMING_SOON" && (
-                                      <span className="ml-auto text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200/70">Soon</span>
-                                    )}
                                   </Link>
                                 </li>
                               );

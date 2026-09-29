@@ -22,6 +22,7 @@ export interface ISplitJobParams {
     mode?: "ranges" | "pages" | "every-page";
     ranges?: Array<{ start: number; end: number }>;
     pages?: number[];
+    maxFileSizeBytes?: number;
   };
 }
 
@@ -173,7 +174,7 @@ export class SplitProcessor {
         const outputSize = Buffer.byteLength(subPdfBytes);
 
         // Validate each generated file against per-file maximum size limit before reservation
-        const maxFileSize = getMaxFileSizeBytes();
+        const maxFileSize = (options?.maxFileSizeBytes as number) || getMaxFileSizeBytes();
         if (outputSize > maxFileSize) {
           throw new PayloadTooLargeError(
             `Generated file '${plan.originalName}' exceeds the maximum permitted size of ${maxFileSize} bytes.`

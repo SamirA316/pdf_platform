@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 
 export type ToolCategory = "pdf" | "image" | "ai";
-export type ToolStatus = "READY" | "COMING_SOON";
+export type ToolStatus = "READY";
 
 export const DEFAULT_MAX_FILE_SIZE_MB = Number(process.env.NEXT_PUBLIC_MAX_FILE_SIZE_MB || 50);
 
@@ -195,7 +195,7 @@ export const tools: ToolMetadata[] = [
   {
     slug: "pdf-to-word",
     title: "PDF to Word",
-    description: "Convert your PDF files into editable DOC and DOCX documents.",
+    description: "Extract PDF text to Word",
     category: "pdf", categories: ["Convert PDF"],
     icon: FileText, color: "text-blue-500", bgColor: "bg-blue-50",
     accept: ".pdf", maxSizeMB: DEFAULT_MAX_FILE_SIZE_MB, actionType: "basic", allowMultiple: false,
@@ -206,7 +206,7 @@ export const tools: ToolMetadata[] = [
   {
     slug: "pdf-to-powerpoint",
     title: "PDF to PowerPoint",
-    description: "Turn your PDF files into editable PPT and PPTX slideshows.",
+    description: "Convert PDF pages into PowerPoint slides — one slide per page with full visual fidelity.",
     category: "pdf", categories: ["Convert PDF"],
     icon: Presentation, color: "text-orange-600", bgColor: "bg-orange-100",
     accept: ".pdf", maxSizeMB: DEFAULT_MAX_FILE_SIZE_MB, actionType: "basic", allowMultiple: false,
@@ -217,7 +217,7 @@ export const tools: ToolMetadata[] = [
   {
     slug: "pdf-to-excel",
     title: "PDF to Excel",
-    description: "Pull tabular data straight from PDFs into Excel spreadsheets.",
+    description: "Extract PDF tables to Excel",
     category: "pdf", categories: ["Convert PDF"],
     icon: Table, color: "text-green-600", bgColor: "bg-green-100",
     accept: ".pdf", maxSizeMB: DEFAULT_MAX_FILE_SIZE_MB, actionType: "basic", allowMultiple: false,
@@ -316,8 +316,8 @@ export const tools: ToolMetadata[] = [
   {
     slug: "ocr-pdf",
     title: "OCR PDF",
-    description: "Convert scanned PDFs into searchable and selectable text documents.",
-    category: "pdf", categories: ["Convert PDF"],
+    description: "Convert scanned PDFs into searchable PDFs using OCR text recognition.",
+    category: "pdf", categories: ["Convert PDF", "Optimize PDF"],
     icon: ScanText, color: "text-blue-600", bgColor: "bg-blue-50",
     accept: ".pdf", maxSizeMB: DEFAULT_MAX_FILE_SIZE_MB, actionType: "basic", allowMultiple: false,
     status: "READY",
@@ -374,7 +374,7 @@ export const tools: ToolMetadata[] = [
     description: "Generate instant intelligent executive summaries of long PDF documents.",
     category: "ai", categories: ["AI PDF"],
     icon: Wand2, color: "text-fuchsia-500", bgColor: "bg-fuchsia-50",
-    accept: ".pdf,.txt,.docx", maxSizeMB: DEFAULT_MAX_FILE_SIZE_MB, actionType: "basic", allowMultiple: false,
+    accept: ".pdf", maxSizeMB: DEFAULT_MAX_FILE_SIZE_MB, actionType: "basic", allowMultiple: false,
     status: "READY",
     backendEndpoint: "POST /api/v1/jobs",
     processor: "AiToolsProcessor",
@@ -382,7 +382,7 @@ export const tools: ToolMetadata[] = [
   {
     slug: "translate-pdf",
     title: "Translate PDF",
-    description: "Translate PDF text into over 50 global languages while preserving layout.",
+    description: "Translate extracted PDF text into your selected language.",
     category: "ai", categories: ["AI PDF"],
     icon: Languages, color: "text-cyan-500", bgColor: "bg-cyan-50",
     accept: ".pdf", maxSizeMB: DEFAULT_MAX_FILE_SIZE_MB, actionType: "basic", allowMultiple: false,
@@ -441,9 +441,6 @@ export function getToolsByFilter(filter: string): ToolMetadata[] {
   if (filter === "All" || filter === "Core Tools") {
     // In Production Beta, prioritize the 12 Core Tools as the primary launch catalog
     return tools.filter((t) => t.status === "READY");
-  }
-  if (filter === "Coming Soon") {
-    return tools.filter((t) => t.status === "COMING_SOON");
   }
   if (filter === "All Tools (Overview)") {
     return tools;

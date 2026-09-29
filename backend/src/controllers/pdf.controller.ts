@@ -5,7 +5,6 @@ import fs from "fs";
 import { AuthRequest } from "../middlewares/auth.middleware";
 import { exec } from "child_process";
 import util from "util";
-import OpenAI from "openai";
 import puppeteer from "puppeteer";
 import sharp from "sharp";
 import { compressPDFFile } from "../utils/pdfCompressor";
@@ -16,7 +15,6 @@ import { logger } from "../common/logger";
 
 const pdfParse = require("pdf-parse");
 const execPromise = util.promisify(exec);
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" });
 const uploadDir = storageService.getStorageRoot();
 
 
@@ -179,286 +177,32 @@ export const compressPDF = async (req: AuthRequest, res: Response): Promise<void
   }
 };
 
-export const aiSummarize = async (req: AuthRequest, res: Response): Promise<void> => {
-  try {
-    const userId = req.userId as string;
-    const file = req.file;
-
-    if (!file) {
-      res.status(400).json({ error: "No PDF file provided" });
-      return;
-    }
-
-    const dataBuffer = fs.readFileSync(file.path);
-    const pdfData = await pdfParse(dataBuffer);
-    const textContext = pdfData.text.substring(0, 15000); // Limit to avoid token overflow
-
-    const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
-      messages: [
-        { role: "system", content: "You are an expert AI summarizer. Summarize the following document content clearly and concisely." },
-        { role: "user", content: textContext }
-      ],
-    });
-
-    const summaryText = completion.choices[0]?.message?.content || "No summary generated.";
-
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    const newFilename = `summary-${uniqueSuffix}.txt`;
-    const newPath = path.join(uploadDir, newFilename);
-
-    fs.writeFileSync(newPath, summaryText);
-
-    const document = await prisma.document.create({
-      data: {
-        filename: newFilename,
-        originalName: `summary-${file.originalname}.txt`,
-        size: fs.statSync(newPath).size,
-        type: "AI_SUMMARY",
-        path: newPath,
-        userId: userId,
-      },
-    });
-
-    fs.unlinkSync(file.path);
-    res.status(201).json({ message: "PDF summarized successfully", document: toPublicDocument(document) });
-  } catch (error) {
-    logger.error("AI Summarize error", "LEGACY_PDF");
-    if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-    res.status(500).json({ error: "Internal server error" });
-  }
+export const aiSummarize = async (_req: AuthRequest, res: Response): Promise<void> => {
+  res.status(410).json({
+    error: "ENDPOINT_REMOVED",
+    message: "Legacy direct AI summarizer endpoint is permanently disabled. Use POST /api/v1/jobs with tool: 'ai-summarizer'.",
+  });
 };
 
-export const aiTranslate = async (req: AuthRequest, res: Response): Promise<void> => {
-  try {
-    const userId = req.userId as string;
-    const file = req.file;
-
-    if (!file) {
-      res.status(400).json({ error: "No PDF file provided" });
-      return;
-    }
-
-    const dataBuffer = fs.readFileSync(file.path);
-    const pdfData = await pdfParse(dataBuffer);
-    const textContext = pdfData.text.substring(0, 10000);
-
-    const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
-      messages: [
-        { role: "system", content: "You are an expert AI translator. Translate the following text into English if it is not in English, or into Spanish if it is already in English." },
-        { role: "user", content: textContext }
-      ],
-    });
-
-    const translationText = completion.choices[0]?.message?.content || "No translation generated.";
-
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    const newFilename = `translation-${uniqueSuffix}.txt`;
-    const newPath = path.join(uploadDir, newFilename);
-
-    fs.writeFileSync(newPath, translationText);
-
-    const document = await prisma.document.create({
-      data: {
-        filename: newFilename,
-        originalName: `translation-${file.originalname}.txt`,
-        size: fs.statSync(newPath).size,
-        type: "AI_TRANSLATION",
-        path: newPath,
-        userId: userId,
-      },
-    });
-
-    fs.unlinkSync(file.path);
-    res.status(201).json({ message: "PDF translated successfully", document: toPublicDocument(document) });
-  } catch (error) {
-    logger.error("AI Translate error", "LEGACY_PDF");
-    if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-    res.status(500).json({ error: "Internal server error" });
-  }
+export const aiTranslate = async (_req: AuthRequest, res: Response): Promise<void> => {
+  res.status(410).json({
+    error: "ENDPOINT_REMOVED",
+    message: "Legacy direct AI translation endpoint is permanently disabled. Use POST /api/v1/jobs with tool: 'translate-pdf'.",
+  });
 };
 
-export const chatWithPdf = async (req: AuthRequest, res: Response): Promise<void> => {
-  try {
-    const userId = req.userId as string;
-    const file = req.file;
-    const { query } = req.body;
-
-    if (!file) {
-      res.status(400).json({ error: "No PDF file provided" });
-      return;
-    }
-
-    const dataBuffer = fs.readFileSync(file.path);
-    const pdfData = await pdfParse(dataBuffer);
-    const textContext = pdfData.text.substring(0, 15000);
-
-    const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
-      messages: [
-        { role: "system", content: "You are an AI assistant helping the user extract insights from a document. Answer their question based ONLY on the provided document text." },
-        { role: "user", content: `Document Text: \n\n${textContext}\n\nQuestion: ${query || "What is this document about?"}` }
-      ],
-    });
-
-    const answerText = completion.choices[0]?.message?.content || "Could not generate an answer.";
-
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    const newFilename = `chat-answer-${uniqueSuffix}.txt`;
-    const newPath = path.join(uploadDir, newFilename);
-
-    fs.writeFileSync(newPath, answerText);
-
-    const document = await prisma.document.create({
-      data: {
-        filename: newFilename,
-        originalName: `answer-${file.originalname}.txt`,
-        size: fs.statSync(newPath).size,
-        type: "AI_CHAT",
-        path: newPath,
-        userId: userId,
-      },
-    });
-
-    fs.unlinkSync(file.path);
-    res.status(201).json({ message: "Chat processed successfully", document: toPublicDocument(document) });
-  } catch (error) {
-    logger.error("Chat with PDF error", "LEGACY_PDF");
-    if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-    res.status(500).json({ error: "Internal server error" });
-  }
+export const chatWithPdf = async (_req: AuthRequest, res: Response): Promise<void> => {
+  res.status(410).json({
+    error: "ENDPOINT_REMOVED",
+    message: "Legacy direct AI chat endpoint is permanently disabled. Use POST /api/v1/jobs with tool: 'chat-with-pdf'.",
+  });
 };
 
-export const convertToPdf = async (req: AuthRequest, res: Response): Promise<void> => {
-  try {
-    const userId = req.userId as string;
-    const file = req.file || (req.files && Array.isArray(req.files) && req.files.length > 0 ? req.files[0] : null);
-
-    if (!file) {
-      res.status(400).json({ error: "No file provided" });
-      return;
-    }
-
-    const ext = path.extname(file.originalname).toLowerCase();
-    const baseName = path.parse(file.filename).name;
-    const originalBaseName = path.parse(file.originalname).name;
-    const newFilename = `${baseName}.pdf`;
-    const generatedPdfPath = path.join(uploadDir, newFilename);
-
-    let converted = false;
-
-    // 1. Attempt LibreOffice if available on system
-    const libreOfficePath = "/Applications/LibreOffice.app/Contents/MacOS/soffice";
-    try {
-      await execPromise(`"${libreOfficePath}" --headless --convert-to pdf "${file.path}" --outdir "${uploadDir}"`);
-      if (fs.existsSync(generatedPdfPath) && fs.statSync(generatedPdfPath).size > 0) {
-        converted = true;
-      }
-    } catch {
-      // LibreOffice not available, proceed to Node.js fallbacks
-    }
-
-    // 2. Pure Node.js fallback conversion
-    if (!converted) {
-      if (ext === ".docx" || ext === ".doc") {
-        try {
-          const mammoth = require("mammoth");
-          const result = await mammoth.convertToHtml({ path: file.path });
-          const html = result.value || "<p>Empty document</p>";
-
-          const styledHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 40px; line-height: 1.6; color: #222; }
-            h1, h2, h3, h4, h5, h6 { color: #111; margin-top: 1.4em; margin-bottom: 0.6em; }
-            p { margin-bottom: 1em; }
-            table { border-collapse: collapse; width: 100%; margin: 20px 0; font-size: 14px; }
-            th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
-            th { background-color: #f8f9fa; font-weight: bold; }
-            img { max-width: 100%; height: auto; }
-          </style></head><body>${html}</body></html>`;
-
-          const browser = await puppeteer.launch({
-            headless: "new" as any,
-            args: ["--no-sandbox", "--disable-setuid-sandbox"],
-          });
-          const page = await browser.newPage();
-          await page.setContent(styledHtml, { waitUntil: "load" });
-          await page.pdf({
-            path: generatedPdfPath,
-            format: "A4",
-            margin: { top: "20mm", right: "20mm", bottom: "20mm", left: "20mm" },
-            printBackground: true,
-          });
-          await browser.close();
-          converted = true;
-        } catch (docxErr) {
-          logger.warn("DOCX conversion fallback error", "LEGACY_PDF");
-        }
-      } else if (ext === ".xlsx" || ext === ".xls" || ext === ".csv") {
-        try {
-          const XLSX = require("xlsx");
-          const wb = XLSX.readFile(file.path);
-          let allSheetsHtml = "";
-          for (const sheetName of wb.SheetNames) {
-            allSheetsHtml += `<h2>${sheetName}</h2>` + XLSX.utils.sheet_to_html(wb.Sheets[sheetName]);
-          }
-
-          const styledHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 30px; }
-            h2 { margin-top: 20px; color: #333; }
-            table { border-collapse: collapse; width: 100%; margin-bottom: 30px; font-size: 13px; }
-            th, td { border: 1px solid #ccc; padding: 6px 10px; text-align: left; }
-            th { background: #f0f0f0; }
-          </style></head><body>${allSheetsHtml}</body></html>`;
-
-          const browser = await puppeteer.launch({
-            headless: "new" as any,
-            args: ["--no-sandbox", "--disable-setuid-sandbox"],
-          });
-          const page = await browser.newPage();
-          await page.setContent(styledHtml, { waitUntil: "load" });
-          await page.pdf({ path: generatedPdfPath, format: "A4", printBackground: true });
-          await browser.close();
-          converted = true;
-        } catch (xlsxErr) {
-          logger.warn("XLSX conversion fallback error", "LEGACY_PDF");
-        }
-      }
-    }
-
-    // 3. Fallback PDF generation if document parser didn't produce file
-    if (!converted || !fs.existsSync(generatedPdfPath)) {
-      const doc = await PDFDocument.create();
-      const page = doc.addPage([595, 842]);
-      const font = await doc.embedFont(StandardFonts.HelveticaBold);
-      const normalFont = await doc.embedFont(StandardFonts.Helvetica);
-
-      page.drawText(`${originalBaseName}`, { x: 50, y: 780, size: 22, font, color: rgb(0.1, 0.1, 0.1) });
-      page.drawText(`Converted from ${file.originalname}`, { x: 50, y: 750, size: 14, font: normalFont, color: rgb(0.4, 0.4, 0.4) });
-      page.drawText(`File Size: ${(file.size / 1024).toFixed(1)} KB`, { x: 50, y: 720, size: 12, font: normalFont, color: rgb(0.5, 0.5, 0.5) });
-
-      const pdfBytes = await doc.save();
-      fs.writeFileSync(generatedPdfPath, pdfBytes);
-    }
-
-    const document = await prisma.document.create({
-      data: {
-        filename: newFilename,
-        originalName: `${originalBaseName}.pdf`,
-        size: fs.statSync(generatedPdfPath).size,
-        type: "CONVERTED_TO_PDF",
-        path: generatedPdfPath,
-        userId: userId,
-      },
-    });
-
-    if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
-    res.status(201).json({ message: "Converted to PDF successfully", document: toPublicDocument(document) });
-  } catch (error) {
-    logger.error("Convert to PDF error", "LEGACY_PDF");
-    if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-    res.status(500).json({ error: (error as Error).message || "Internal server error" });
-  }
+export const convertToPdf = async (_req: AuthRequest, res: Response): Promise<void> => {
+  res.status(410).json({
+    error: "ENDPOINT_REMOVED",
+    message: "Legacy convert-to-pdf endpoint is permanently disabled. Use POST /api/v1/jobs with tool: 'word-to-pdf', 'excel-to-pdf', or 'powerpoint-to-pdf'.",
+  });
 };
 
 export const pdfToImage = async (req: AuthRequest, res: Response): Promise<void> => {
@@ -652,43 +396,11 @@ export const pdfToPdfA = async (req: AuthRequest, res: Response): Promise<void> 
   }
 };
 
-export const pdfToMarkdown = async (req: AuthRequest, res: Response): Promise<void> => {
-  try {
-    const userId = req.userId as string;
-    const file = req.file;
-    if (!file) {
-      res.status(400).json({ error: "No PDF file provided" });
-      return;
-    }
-
-    const dataBuffer = fs.readFileSync(file.path);
-    const pdfData = await pdfParse(dataBuffer);
-    const textContext = pdfData.text.substring(0, 15000);
-
-    const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
-      messages: [
-        { role: "system", content: "Convert the following document text into beautifully formatted Markdown." },
-        { role: "user", content: textContext }
-      ],
-    });
-
-    const markdownText = completion.choices[0]?.message?.content || "No content generated.";
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    const newFilename = `converted-${uniqueSuffix}.md`;
-    const newPath = path.join(uploadDir, newFilename);
-
-    fs.writeFileSync(newPath, markdownText);
-
-    const document = await prisma.document.create({
-      data: { filename: newFilename, originalName: `converted-${file.originalname}.md`, size: fs.statSync(newPath).size, type: "MARKDOWN", path: newPath, userId },
-    });
-
-    fs.unlinkSync(file.path);
-    res.status(201).json({ message: "Converted to Markdown successfully", document: toPublicDocument(document) });
-  } catch (error) {
-    res.status(500).json({ error: "Internal server error" });
-  }
+export const pdfToMarkdown = async (_req: AuthRequest, res: Response): Promise<void> => {
+  res.status(410).json({
+    error: "ENDPOINT_REMOVED",
+    message: "Legacy direct PDF to Markdown endpoint is permanently disabled. Use POST /api/v1/jobs with tool: 'pdf-to-markdown'.",
+  });
 };
 
 export const htmlToPdf = async (req: AuthRequest, res: Response): Promise<void> => {
@@ -766,47 +478,11 @@ export const htmlToPdf = async (req: AuthRequest, res: Response): Promise<void> 
   }
 };
 
-export const ocrPdf = async (req: AuthRequest, res: Response): Promise<void> => {
-  try {
-    const userId = req.userId as string;
-    const file = req.file;
-    if (!file) {
-      res.status(400).json({ error: "No PDF file provided" });
-      return;
-    }
-
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    const tempTiff = path.join(uploadDir, `temp-${uniqueSuffix}.tiff`);
-    const outBase = path.join(uploadDir, `ocr-${uniqueSuffix}`);
-    const newPath = `${outBase}.pdf`;
-    const newFilename = `ocr-${uniqueSuffix}.pdf`;
-
-    try {
-      // Try CLI Tesseract and Ghostscript if available
-      await execPromise(`gs -sDEVICE=tiff32nc -r300 -o "${tempTiff}" "${file.path}"`);
-      await execPromise(`tesseract "${tempTiff}" "${outBase}" pdf`);
-      if (fs.existsSync(tempTiff)) fs.unlinkSync(tempTiff);
-    } catch (ocrErr) {
-      logger.warn("Tesseract CLI not available, producing verified searchable PDF fallback", "LEGACY_PDF");
-      const pdfBytes = fs.readFileSync(file.path);
-      const pdfDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
-      pdfDoc.setProducer("PDF Platform OCR Engine");
-      const newPdfBytes = await pdfDoc.save();
-      fs.writeFileSync(newPath, newPdfBytes);
-      if (fs.existsSync(tempTiff)) fs.unlinkSync(tempTiff);
-    }
-
-    const document = await prisma.document.create({
-      data: { filename: newFilename, originalName: `ocr-${file.originalname}`, size: fs.statSync(newPath).size, type: "OCR", path: newPath, userId },
-    });
-
-    if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
-    res.status(201).json({ message: "OCR processed successfully", document: toPublicDocument(document) });
-  } catch (error) {
-    logger.error("OCR PDF error", "LEGACY_PDF");
-    if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-    res.status(500).json({ error: (error as Error).message || "Internal server error" });
-  }
+export const ocrPdf = async (_req: AuthRequest, res: Response): Promise<void> => {
+  res.status(410).json({
+    error: "ENDPOINT_REMOVED",
+    message: "Legacy OCR PDF endpoint is permanently disabled. Use POST /api/v1/jobs with tool: 'ocr-pdf'.",
+  });
 };
 
 let tesseractWorkerInstance: any = null;
@@ -875,39 +551,23 @@ export const ocrCrop = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-export const pdfToOffice = async (req: AuthRequest, res: Response): Promise<void> => {
-  try {
-    const userId = req.userId as string;
-    const file = req.file;
-    const slug = req.params.slug; // e.g. pdf-to-word
-    if (!file) {
-      res.status(400).json({ error: "No PDF file provided" });
-      return;
-    }
-
-    let ext = ".doc";
-    if (slug === "pdf-to-excel") ext = ".xls";
-    if (slug === "pdf-to-powerpoint") ext = ".ppt";
-
-    const dataBuffer = fs.readFileSync(file.path);
-    const pdfData = await pdfParse(dataBuffer);
-    
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    const newFilename = `converted-${uniqueSuffix}${ext}`;
-    const newPath = path.join(uploadDir, newFilename);
-
-    // Basic conversion: just write the text to the file. For real conversion, a paid API or Python lib is needed.
-    fs.writeFileSync(newPath, pdfData.text);
-
-    const document = await prisma.document.create({
-      data: { filename: newFilename, originalName: `converted-${file.originalname}${ext}`, size: fs.statSync(newPath).size, type: "PDF_TO_OFFICE", path: newPath, userId },
-    });
-
-    fs.unlinkSync(file.path);
-    res.status(201).json({ message: `Converted to ${ext} successfully`, document: toPublicDocument(document) });
-  } catch (error) {
-    res.status(500).json({ error: "Internal server error" });
-  }
+export const pdfToOffice = async (_req: AuthRequest, res: Response): Promise<void> => {
+  /**
+   * REMOVED: This legacy endpoint previously wrote raw PDF text directly into
+   * .docx/.xlsx/.pptx files — not a real Office conversion.
+   *
+   * All PDF-to-Office conversions must use the job pipeline:
+   *   POST /api/v1/jobs  { tool: "pdf-to-word" | "pdf-to-excel" | "pdf-to-powerpoint" }
+   *
+   * The real conversion is handled by PdfToOfficeProcessor which uses:
+   *   - XLSX library for .xlsx output
+   *   - OOXML/JSZip for .docx output
+   *   - Puppeteer + OOXML/JSZip for .pptx output (one slide per page)
+   */
+  res.status(410).json({
+    error: "ENDPOINT_REMOVED",
+    message: "Legacy PDF-to-Office conversion is permanently disabled. Use POST /api/v1/jobs with tool: 'pdf-to-word', 'pdf-to-excel', or 'pdf-to-powerpoint'.",
+  });
 };
 
 export const advancedUiProcessor = async (req: AuthRequest, res: Response): Promise<void> => {

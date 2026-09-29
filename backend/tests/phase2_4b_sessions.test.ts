@@ -93,9 +93,8 @@ async function runPhase24BTests() {
   // Create a session for Bob
   const sessionB1 = await sessionService.createSession(userB_id);
 
-  // ---------------------------------------------------------------------------
   // TEST 1: GET /sessions without auth -> 401
-  // ---------------------------------------------------------------------------
+
   const res1 = await fetch(`${BASE_URL}/api/v1/auth/sessions`);
   if (res1.status === 401) {
     console.log("✅ [PASS] Test 1: GET /api/v1/auth/sessions without auth returns 401");
@@ -103,9 +102,8 @@ async function runPhase24BTests() {
     throw new Error(`Test 1 Failed: Expected 401, got ${res1.status}`);
   }
 
-  // ---------------------------------------------------------------------------
   // TEST 2: GET /sessions -> only own sessions
-  // ---------------------------------------------------------------------------
+
   const res2 = await fetch(`${BASE_URL}/api/v1/auth/sessions`, {
     headers: { Authorization: `Bearer ${sessionA1.rawToken}` },
   });
@@ -123,9 +121,8 @@ async function runPhase24BTests() {
     throw new Error(`Test 2 Failed: Expected 3 sessions belonging to Alice, got: ${JSON.stringify(json2)}`);
   }
 
-  // ---------------------------------------------------------------------------
   // TEST 3: Current session identified properly
-  // ---------------------------------------------------------------------------
+
   const currentSession = sessionsList.find((s: any) => s.id === sessionA1.session.id);
   const otherSessionA2 = sessionsList.find((s: any) => s.id === sessionA2.session.id);
   if (currentSession?.current === true && otherSessionA2?.current === false) {

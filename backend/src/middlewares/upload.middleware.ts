@@ -21,24 +21,24 @@ const storage = multer.diskStorage({
 });
 
 // Strict Extension to Permitted MIME Types mapping (Launch Plan Item 6)
-const EXT_MIME_MAP: Record<string, string[]> = {
-  ".pdf": ["application/pdf", "application/x-pdf"],
-  ".jpg": ["image/jpeg", "image/pjpeg"],
-  ".jpeg": ["image/jpeg", "image/pjpeg"],
-  ".png": ["image/png"],
-  ".webp": ["image/webp"],
-  ".doc": ["application/msword"],
-  ".docx": ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
-  ".xls": ["application/vnd.ms-excel"],
-  ".xlsx": ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"],
-  ".ppt": ["application/vnd.ms-powerpoint"],
-  ".pptx": ["application/vnd.openxmlformats-officedocument.presentationml.presentation"],
-  ".txt": ["text/plain"],
-  ".html": ["text/html"],
-  ".htm": ["text/html"],
+export const FILE_CATEGORIES = {
+  PDF: { extensions: [".pdf"], mimeTypes: ["application/pdf", "application/x-pdf"] },
+  IMAGE: { extensions: [".jpg", ".jpeg", ".png", ".webp"], mimeTypes: ["image/jpeg", "image/pjpeg", "image/png", "image/webp"] },
+  WORD: { extensions: [".doc", ".docx"], mimeTypes: ["application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"] },
+  EXCEL: { extensions: [".xls", ".xlsx"], mimeTypes: ["application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"] },
+  POWERPOINT: { extensions: [".ppt", ".pptx"], mimeTypes: ["application/vnd.ms-powerpoint", "application/vnd.openxmlformats-officedocument.presentationml.presentation"] },
+  HTML: { extensions: [".html", ".htm"], mimeTypes: ["text/html"] },
+  TEXT: { extensions: [".txt"], mimeTypes: ["text/plain"] },
 };
 
-const fileFilter = (req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
+export const EXT_MIME_MAP: Record<string, string[]> = {};
+Object.values(FILE_CATEGORIES).forEach((category) => {
+  category.extensions.forEach((ext) => {
+    EXT_MIME_MAP[ext] = category.mimeTypes;
+  });
+});
+
+export const fileFilter = (req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
   const ext = path.extname(file.originalname).toLowerCase();
   const mime = (file.mimetype || "").toLowerCase().trim();
 

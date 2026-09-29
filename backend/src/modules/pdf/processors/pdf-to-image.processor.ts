@@ -59,7 +59,8 @@ export class PdfToImageProcessor {
 
     const userDir = storageService.getUserStorageDir(userId);
     const randomHex = crypto.randomBytes(8).toString("hex");
-
+    let physicalOutputPath = "";
+    
     let browser;
     try {
       logger.info(`[JOB] Processing ${jobId}: Converting PDF to ${ext.toUpperCase()}`, "JOB");
@@ -69,24 +70,46 @@ export class PdfToImageProcessor {
 
       browser = await puppeteer.launch({
         headless: true,
-        args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+        args: ["--disable-dev-shm-usage"],
       });
 
       const page = await browser.newPage();
-      await page.setContent(`
-        <!DOCTYPE html>
+      await page.setRequestInterception(true);
+      page.on('request', (request) => {
+        if (request.url() === 'http://localhost/') {
+          request.respond({
+            status: 200,
+            contentType: 'text/html',
+            body: `<!DOCTYPE html>
         <html>
-          <head>
-            <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-            <script>
-              pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
-            </script>
-          </head>
           <body style="margin:0; padding:0; background:white;">
             <canvas id="render-canvas"></canvas>
+            <script type="module">
+              import * as pdfjsLib from 'http://localhost/pdf.mjs';
+              pdfjsLib.GlobalWorkerOptions.workerSrc = 'http://localhost/pdf.worker.mjs';
+              window.pdfjsLib = pdfjsLib;
+            </script>
           </body>
-        </html>
-      `);
+        </html>`
+          });
+        } else if (request.url().endsWith('pdf.mjs')) {
+          request.respond({
+            status: 200,
+            contentType: 'application/javascript',
+            body: fs.readFileSync(require.resolve('pdfjs-dist/build/pdf.min.mjs'))
+          });
+        } else if (request.url().endsWith('pdf.worker.mjs')) {
+          request.respond({
+            status: 200,
+            contentType: 'application/javascript',
+            body: fs.readFileSync(require.resolve('pdfjs-dist/build/pdf.worker.min.mjs'))
+          });
+        } else {
+          request.continue();
+        }
+      });
+      await page.goto(`http://localhost/`, { waitUntil: 'networkidle0' });
+      await page.waitForFunction('window.pdfjsLib !== undefined');
 
       const totalPages = await page.evaluate(async (dataB64) => {
         const raw = atob(dataB64);
@@ -156,7 +179,7 @@ export class PdfToImageProcessor {
 
       const outExt = path.extname(finalFilename);
       const diskFilename = `file_${randomHex}${outExt}`;
-      const physicalOutputPath = path.join(userDir, diskFilename);
+      physicalOutputPath = path.join(userDir, diskFilename);
       const storageKey = `users/${userId}/${diskFilename}`;
 
       await fs.promises.writeFile(physicalOutputPath, finalBuffer);
@@ -180,6 +203,9 @@ export class PdfToImageProcessor {
       };
     } catch (err: any) {
       if (browser) await browser.close().catch(() => {});
+      if (physicalOutputPath && fs.existsSync(physicalOutputPath)) {
+        try { await fs.promises.unlink(physicalOutputPath); } catch {}
+      }
       throw err;
     }
   }

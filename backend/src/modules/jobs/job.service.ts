@@ -27,6 +27,7 @@ import { officeToPdfProcessor } from "../pdf/processors/office-to-pdf.processor"
 import { pdfToOfficeProcessor } from "../pdf/processors/pdf-to-office.processor";
 import { ocrProcessor } from "../pdf/processors/ocr.processor";
 import { aiToolsProcessor } from "../pdf/processors/ai-tools.processor";
+import { editProcessor } from "../pdf/processors/edit.processor";
 import { filesService } from "../files/files.service";
 import {
   JobNotFoundError,
@@ -509,6 +510,16 @@ export class JobService {
           userId,
           inputFileId: inputFileIds[0]!,
           tool,
+          options: effectiveOptions,
+        });
+        resultOutputFileId = result.outputFileId;
+        resultMetrics = result.metrics;
+        generatedOutputFileIds.push(result.outputFileId);
+      } else if (tool === "edit-pdf") {
+        const result = await editProcessor.process({
+          jobId,
+          userId,
+          inputFileId: inputFileIds[0]!,
           options: effectiveOptions,
         });
         resultOutputFileId = result.outputFileId;
