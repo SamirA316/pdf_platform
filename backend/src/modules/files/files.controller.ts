@@ -17,7 +17,7 @@ import { logger } from "../../common/logger";
 export class FilesController {
   /**
    * POST /api/v1/files
-   * Handles single PDF upload and records database entry.
+   * Handles single file upload and records database entry.
    * Enforces:
    * - E1 & E2: Max individual file size limits (both middleware and controller physical verification)
    * - E3 & E5: Atomic per-user storage quota enforcement and race condition protection
@@ -32,7 +32,7 @@ export class FilesController {
 
       const file = req.file;
       if (!file) {
-        throw new FileRequiredError("A PDF file is required in 'file' form field.");
+        throw new FileRequiredError("An allowed file is required in 'file' form field.");
       }
 
       // Read true physical size from disk (never trust declared client header alone)

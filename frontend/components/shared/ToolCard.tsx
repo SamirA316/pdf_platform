@@ -7,14 +7,13 @@ interface ToolCardProps {
   description: string;
   icon: LucideIcon;
   href: string;
-  color?: string; // e.g., 'text-red-500', 'text-blue-500'
-  bgColor?: string; // e.g., 'bg-red-50', 'bg-blue-50'
-  badge?: string; // 'New!'
+  color?: string;
+  bgColor?: string;
+  badge?: string;
   status?: string;
 }
 
-export function ToolCard({ title, description, icon: Icon, href, color = "text-red-500", bgColor = "bg-red-50", badge, status }: ToolCardProps) {
-  const isComingSoon = status === "COMING_SOON" || badge === "Coming Soon";
+export function ToolCard({ title, description, icon: Icon, href, color = "text-red-500", bgColor = "bg-red-50", badge }: ToolCardProps) {
   return (
     <Link 
       href={href} 
@@ -26,15 +25,11 @@ export function ToolCard({ title, description, icon: Icon, href, color = "text-r
             <div className={`p-3 rounded-xl ${bgColor} ${color} transition-transform duration-300 group-hover:scale-110 group-hover:shadow-sm`}>
               <Icon className="w-7 h-7" strokeWidth={2} />
             </div>
-            {isComingSoon ? (
-              <span className="bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-extrabold px-2.5 py-1 rounded-full uppercase tracking-wider">
-                Coming Soon
-              </span>
-            ) : badge ? (
+            {badge && (
               <span className="bg-red-100 text-red-700 text-[11px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider">
                 {badge}
               </span>
-            ) : null}
+            )}
           </div>
           <CardTitle className="text-[1.15rem] font-bold tracking-tight text-[#33333B] group-hover:text-red-500 transition-colors">
             {title}

@@ -38,6 +38,7 @@ const REGRESSION_SUITES = [
   { phase: "Phase 5.5.6", name: "Text Object Rotation (Handle, Center Math, Normalization & History)", file: "phase5_editor_rotate.test.ts" },
   { phase: "Phase 6", name: "Production STORAGE_ROOT Security Enforcement", file: "phase6_storage_root.test.ts" },
   { phase: "Phase 7", name: "Durable Worker Restart & Crash Recovery Verification", file: "worker_restart.test.ts" },
+  { phase: "Phase 8", name: "All READY Tools E2E", file: "all_tools_suite.test.ts" },
 ];
 
 async function runStep(suite: { phase: string; name: string; file: string }): Promise<ISuiteResult> {

@@ -3,6 +3,7 @@ import fs from "fs";
 import { PDFDocument } from "pdf-lib";
 import { prisma } from "../../common/prisma";
 import { storageService } from "../files/storage.service";
+import { FILE_CATEGORIES } from "../../middlewares/upload.middleware";
 import {
   ALLOWED_TOOLS,
   ALLOWED_COMPRESS_LEVELS,
@@ -105,16 +106,43 @@ export async function validateCreateJob(userId: string, data: ICreateJobDto): Pr
     const isHtmlInput = normalizedTool === "html-to-pdf";
 
     if (isImageInput) {
-      const allowedImageMimes = new Set(["image/jpeg", "image/png", "image/webp", "image/tiff"]);
+      const allowedImageMimes = new Set(FILE_CATEGORIES.IMAGE.mimeTypes);
       if (!allowedImageMimes.has(file.mimeType.toLowerCase())) {
         throw new InvalidInputFileError(
           `Input file '${file.originalName}' is not a supported image document (mimeType: ${file.mimeType}).`
         );
       }
-    } else if (isWordInput || isExcelInput || isPptInput || isHtmlInput) {
-      // Office and web files permitted
+    } else if (isWordInput) {
+      const allowedWordMimes = new Set(FILE_CATEGORIES.WORD.mimeTypes);
+      if (!allowedWordMimes.has(file.mimeType.toLowerCase())) {
+        throw new InvalidInputFileError(
+          `Input file '${file.originalName}' is not a valid Word document (mimeType: ${file.mimeType}).`
+        );
+      }
+    } else if (isExcelInput) {
+      const allowedExcelMimes = new Set(FILE_CATEGORIES.EXCEL.mimeTypes);
+      if (!allowedExcelMimes.has(file.mimeType.toLowerCase())) {
+        throw new InvalidInputFileError(
+          `Input file '${file.originalName}' is not a valid Excel document (mimeType: ${file.mimeType}).`
+        );
+      }
+    } else if (isPptInput) {
+      const allowedPptMimes = new Set(FILE_CATEGORIES.POWERPOINT.mimeTypes);
+      if (!allowedPptMimes.has(file.mimeType.toLowerCase())) {
+        throw new InvalidInputFileError(
+          `Input file '${file.originalName}' is not a valid PowerPoint document (mimeType: ${file.mimeType}).`
+        );
+      }
+    } else if (isHtmlInput) {
+      const allowedHtmlMimes = new Set(FILE_CATEGORIES.HTML.mimeTypes);
+      if (!allowedHtmlMimes.has(file.mimeType.toLowerCase())) {
+        throw new InvalidInputFileError(
+          `Input file '${file.originalName}' is not a valid HTML document (mimeType: ${file.mimeType}).`
+        );
+      }
     } else {
-      if (file.mimeType !== "application/pdf") {
+      const allowedPdfMimes = new Set(FILE_CATEGORIES.PDF.mimeTypes);
+      if (!allowedPdfMimes.has(file.mimeType.toLowerCase())) {
         throw new InvalidInputFileError(
           `Input file '${file.originalName}' is not a valid PDF document (mimeType: ${file.mimeType}).`
         );

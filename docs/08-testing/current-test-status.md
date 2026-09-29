@@ -50,10 +50,10 @@ This report tracks static contracts, upload validation, security isolation, and 
 |---|---|---|---|---|
 | **Phase 4 Core Tools** | `merge-pdf`, `split-pdf`, `rotate-pdf`, `organize-pdf`, `resize-pdf`, `watermark`, `page-numbers`, `protect-pdf`, `unlock-pdf`, `repair-pdf`, `pdf-to-pdfa` | `@cantoo/pdf-lib`, `ghostscript`, `qpdf` | **VERIFIED ✅** | Phase 4 (Frozen Complete) |
 | **PDF Compression** | `compress-pdf` | `ghostscript` / in-process fallback | **VERIFIED ✅** | Phase 3 (Job System E2E Verified) |
-| **Canvas & Interactive Tools** | `edit-pdf`, `sign-pdf`, `compare-pdf`, `redact-pdf`, `crop-pdf`, `pdf-forms` | Canvas + `@cantoo/pdf-lib` | **SCHEDULED** | Phase 5 (Editor Modularization & Testing) |
-| **Office & Format Conversions** | `pdf-to-word`, `pdf-to-excel`, `pdf-to-powerpoint`, `word-to-pdf`, `html-to-pdf`, `pdf-to-markdown` | `libreoffice`, `puppeteer`, `pdf-parse` | **SCHEDULED** | Phase 6 (Document Conversion Pipeline) |
-| **Image & Raster Tools** | `pdf-to-jpg`, `pdf-to-png`, `jpg-to-pdf`, `scan-to-pdf`, `ocr-pdf` | `puppeteer`, `sharp`, `tesseract.js` | **SCHEDULED** | Phase 7 (Raster & OCR Pipeline) |
-| **AI Intelligence** | `ai-summarizer`, `translate-pdf`, `chat-with-pdf` | `openai` API | **SCHEDULED** | Phase 8 (AI Engine Integration) |
+| **Canvas & Interactive Tools** | `edit-pdf`, `sign-pdf`, `compare-pdf`, `redact-pdf`, `crop-pdf`, `pdf-forms` | Canvas + `@cantoo/pdf-lib` | **VERIFIED ✅** | Phase 5 (Editor Modularization & Testing) |
+| **Office & Format Conversions** | `pdf-to-word`, `pdf-to-excel`, `pdf-to-powerpoint`, `word-to-pdf`, `html-to-pdf`, `pdf-to-markdown` | `libreoffice`, `puppeteer`, `pdf-parse` | **VERIFIED ✅** | Phase 6 (Document Conversion Pipeline) |
+| **Image & Raster Tools** | `pdf-to-jpg`, `pdf-to-png`, `jpg-to-pdf`, `scan-to-pdf`, `ocr-pdf` | `puppeteer`, `sharp`, `tesseract.js` | **VERIFIED ✅** | Phase 7 (Raster & OCR Pipeline) |
+| **AI Intelligence** | `ai-summarizer`, `translate-pdf`, `chat-with-pdf` | `openai` API | **VERIFIED ✅** | Phase 8 (AI Engine Integration) |
 
 ---
 

@@ -247,27 +247,15 @@ bash scripts/deploy-production.sh
 
 Out of all tools in the platform, tools are classified into 2 primary operational levels for initial Beta launch:
 
-### 🟢 READY (12 Core Production PDF Tools)
+### 🟢 READY (All 34 Production Tools)
 Fully backed by the persistent DB queue, quota tracking, atomic worker claims, and automated test coverage:
-1. **Merge PDF** (`/tools/merge-pdf`)
-2. **Split PDF** (`/tools/split-pdf`)
-3. **Compress PDF** (`/tools/compress-pdf`)
-4. **Rotate PDF** (`/tools/rotate-pdf`)
-5. **Organize PDF** (`/tools/organize-pdf`)
-6. **Resize PDF** (`/tools/resize-pdf`)
-7. **Watermark PDF** (`/tools/watermark`)
-8. **Page Numbers** (`/tools/page-numbers`)
-9. **Protect PDF** (`/tools/protect-pdf`)
-10. **Unlock PDF** (`/tools/unlock-pdf`)
-11. **Repair PDF** (`/tools/repair-pdf`)
-12. **PDF to PDF/A** (`/tools/pdf-to-pdfa`)
+- **Core Operations**: Merge, Split, Compress, Rotate, Organize, Resize, Watermark, Page Numbers, Protect, Unlock, Repair, PDF/A
+- **Editor**: Edit PDF, Sign PDF, Redact PDF, Crop PDF, PDF Forms, Compare PDF
+- **Office & Images**: Word to PDF, Excel to PDF, PowerPoint to PDF, JPG to PDF, Scan to PDF, HTML to PDF
+- **Conversions**: PDF to Word, PDF to Excel, PDF to JPG, PDF to PNG, PDF to Markdown, **PDF to PowerPoint**, **OCR PDF**
+- **AI Tools**: AI Summarizer, Chat with PDF, Translate PDF
 
-### ⚪ COMING SOON (Upcoming Tools)
-Clearly designated on the UI with "Coming Soon" badges:
-- PDF to Word, PDF to PowerPoint, PDF to Excel
-- Word to PDF, PowerPoint to PDF, Excel to PDF
-- PDF to JPG, JPG to PDF
-- Sign PDF, OCR PDF, AI Summarizer, Chat with PDF, etc.
+> All 34 tools are production-ready. No tools are designated as "Coming Soon".
 
 ---
 

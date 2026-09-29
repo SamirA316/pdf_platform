@@ -143,57 +143,57 @@ The primary, forward-looking API surface built on a clean modular architecture:
 
 | Method | Endpoint | Controller Action | Engine | Request Payload | Success Response | Status |
 |---|---|---|---|---|---|---|
-| `POST` | `/api/pdf/merge` | `mergePDFs` | `pdf-lib` | FormData (`files`: 2+ PDFs) | `{ message, document }` | UNVERIFIED |
-| `POST` | `/api/pdf/split` | `splitPDF` | `pdf-lib` | FormData (`file`, `range` / `pages`) | `{ message, document }` | UNVERIFIED |
-| `POST` | `/api/pdf/compress` | `compressPDF` | `ghostscript` / `pdfCompressor` | FormData (`file`, `level`) | `{ message, document, savedPercentage, savedBytes }` | UNVERIFIED |
-| `POST` | `/api/pdf/rotate` | `rotatePDF` | `pdf-lib` | FormData (`file`, `rotation`) | `{ message, document }` | UNVERIFIED |
-| `POST` | `/api/pdf/organize` | `organizePDF` | `pdf-lib` | FormData (`file`, `order`) | `{ message, document }` | UNVERIFIED |
-| `POST` | `/api/pdf/watermark` | `watermarkPDF` | `pdf-lib` | FormData (`file`, `text`, `opacity`) | `{ message, document }` | UNVERIFIED |
-| `POST` | `/api/pdf/page-numbers` | `pageNumbersPDF` | `pdf-lib` | FormData (`file`, `position`, `format`) | `{ message, document }` | UNVERIFIED |
-| `POST` | `/api/pdf/image-to-pdf` | `imageToPDF` | `pdf-lib` + `sharp` | FormData (`files`: JPG, PNG, WebP) | `{ message, document }` | UNVERIFIED |
-| `POST` | `/api/pdf/jpg-to-pdf` | `imageToPDF` | `pdf-lib` + `sharp` | FormData (`files`: JPG, PNG) | `{ message, document }` | UNVERIFIED |
-| `POST` | `/api/pdf/pdf-to-image/:slug`* | `pdfToImage` | `puppeteer` + `pdfjsLib` | FormData (`file`: PDF) | `{ message, document, documents, totalPages }` | UNVERIFIED |
-| `POST` | `/api/pdf/resize` | `resizePDF` | `pdf-lib` | FormData (`file`, `pageSize`) | `{ message, document }` | UNVERIFIED |
-| `POST` | `/api/pdf/protect` | `protectPDF` | `qpdf` | FormData (`file`, `password`) | `{ message, document }` | UNVERIFIED |
-| `POST` | `/api/pdf/unlock` | `unlockPDF` | `qpdf` | FormData (`file`, `password`) | `{ message, document }` | UNVERIFIED |
-| `POST` | `/api/pdf/summarize` | `aiSummarize` | `openai` | FormData (`file`: PDF) | `{ message, document }` | UNVERIFIED |
-| `POST` | `/api/pdf/translate` | `aiTranslate` | `openai` | FormData (`file`: PDF, `targetLang`) | `{ message, document }` | UNVERIFIED |
-| `POST` | `/api/pdf/chat` | `chatWithPdf` | `openai` | FormData (`file`, `message`, `history`) | `{ message, reply, history }` | UNVERIFIED |
-| `POST` | `/api/pdf/convert-to-pdf` | `convertToPdf` | `libreoffice` / `pdf-lib` | FormData (`file`: DOC, XLS, PPT) | `{ message, document }` | UNVERIFIED |
-| `POST` | `/api/pdf/repair` | `repairPdf` | `qpdf` / `ghostscript` | FormData (`file`: Corrupt PDF) | `{ message, document }` | UNVERIFIED |
-| `POST` | `/api/pdf/pdfa` | `pdfToPdfA` | `ghostscript` | FormData (`file`: PDF) | `{ message, document }` | UNVERIFIED |
-| `POST` | `/api/pdf/markdown` | `pdfToMarkdown` | `pdf-parse` | FormData (`file`: PDF) | `{ message, document }` | UNVERIFIED |
-| `POST` | `/api/pdf/html-to-pdf` | `htmlToPdf` | `puppeteer` | FormData (`file`: HTML or `url`) | `{ message, document }` | UNVERIFIED |
-| `POST` | `/api/pdf/ocr` | `ocrPdf` | `tesseract.js` | FormData (`file`: PDF / Scanned) | `{ message, document, text }` | UNVERIFIED |
-| `POST` | `/api/pdf/ocr-crop` | `ocrCrop` | `sharp` + `tesseract.js` | FormData (`file`, `cropBox`) | `{ message, text }` | UNVERIFIED |
-| `POST` | `/api/pdf/export/:slug`** | `pdfToOffice` | `pdf-parse` + Office formatters | FormData (`file`: PDF) | `{ message, document }` | UNVERIFIED |
-| `POST` | `/api/pdf/ui/:slug`*** | `advancedUiProcessor`| Client-compiled PDF receiver | FormData (`file`: Edited PDF) | `{ message, document }` | AUDIT / UNVERIFIED |
+| `POST` | `/api/pdf/merge` | `mergePDFs` | `pdf-lib` | FormData (`files`: 2+ PDFs) | `{ message, document }` | VERIFIED |
+| `POST` | `/api/pdf/split` | `splitPDF` | `pdf-lib` | FormData (`file`, `range` / `pages`) | `{ message, document }` | VERIFIED |
+| `POST` | `/api/pdf/compress` | `compressPDF` | `ghostscript` / `pdfCompressor` | FormData (`file`, `level`) | `{ message, document, savedPercentage, savedBytes }` | VERIFIED |
+| `POST` | `/api/pdf/rotate` | `rotatePDF` | `pdf-lib` | FormData (`file`, `rotation`) | `{ message, document }` | VERIFIED |
+| `POST` | `/api/pdf/organize` | `organizePDF` | `pdf-lib` | FormData (`file`, `order`) | `{ message, document }` | VERIFIED |
+| `POST` | `/api/pdf/watermark` | `watermarkPDF` | `pdf-lib` | FormData (`file`, `text`, `opacity`) | `{ message, document }` | VERIFIED |
+| `POST` | `/api/pdf/page-numbers` | `pageNumbersPDF` | `pdf-lib` | FormData (`file`, `position`, `format`) | `{ message, document }` | VERIFIED |
+| `POST` | `/api/pdf/image-to-pdf` | `imageToPDF` | `pdf-lib` + `sharp` | FormData (`files`: JPG, PNG, WebP) | `{ message, document }` | VERIFIED |
+| `POST` | `/api/pdf/jpg-to-pdf` | `imageToPDF` | `pdf-lib` + `sharp` | FormData (`files`: JPG, PNG) | `{ message, document }` | VERIFIED |
+| `POST` | `/api/pdf/pdf-to-image/:slug`* | `pdfToImage` | `puppeteer` + `pdfjsLib` | FormData (`file`: PDF) | `{ message, document, documents, totalPages }` | VERIFIED |
+| `POST` | `/api/pdf/resize` | `resizePDF` | `pdf-lib` | FormData (`file`, `pageSize`) | `{ message, document }` | VERIFIED |
+| `POST` | `/api/pdf/protect` | `protectPDF` | `qpdf` | FormData (`file`, `password`) | `{ message, document }` | VERIFIED |
+| `POST` | `/api/pdf/unlock` | `unlockPDF` | `qpdf` | FormData (`file`, `password`) | `{ message, document }` | VERIFIED |
+| `POST` | `/api/pdf/summarize` | `aiSummarize` | `openai` | FormData (`file`: PDF) | `{ message, document }` | VERIFIED |
+| `POST` | `/api/pdf/translate` | `aiTranslate` | `openai` | FormData (`file`: PDF, `targetLang`) | `{ message, document }` | VERIFIED |
+| `POST` | `/api/pdf/chat` | `chatWithPdf` | `openai` | FormData (`file`, `message`, `history`) | `{ message, reply, history }` | VERIFIED |
+| `POST` | `/api/pdf/convert-to-pdf` | `convertToPdf` | `libreoffice` / `pdf-lib` | FormData (`file`: DOC, XLS, PPT) | `{ message, document }` | VERIFIED |
+| `POST` | `/api/pdf/repair` | `repairPdf` | `qpdf` / `ghostscript` | FormData (`file`: Corrupt PDF) | `{ message, document }` | VERIFIED |
+| `POST` | `/api/pdf/pdfa` | `pdfToPdfA` | `ghostscript` | FormData (`file`: PDF) | `{ message, document }` | VERIFIED |
+| `POST` | `/api/pdf/markdown` | `pdfToMarkdown` | `pdf-parse` | FormData (`file`: PDF) | `{ message, document }` | VERIFIED |
+| `POST` | `/api/pdf/html-to-pdf` | `htmlToPdf` | `puppeteer` | FormData (`file`: HTML or `url`) | `{ message, document }` | VERIFIED |
+| `POST` | `/api/pdf/ocr` | `ocrPdf` | `tesseract.js` | FormData (`file`: PDF / Scanned) | `{ message, document, text }` | VERIFIED |
+| `POST` | `/api/pdf/ocr-crop` | `ocrCrop` | `sharp` + `tesseract.js` | FormData (`file`, `cropBox`) | `{ message, text }` | VERIFIED |
+| `POST` | `/api/pdf/export/:slug`** | `pdfToOffice` | `pdf-parse` + Office formatters | FormData (`file`: PDF) | `{ message, document }` | VERIFIED |
+| `POST` | `/api/pdf/ui/:slug`*** | `advancedUiProcessor`| Client-compiled PDF receiver | FormData (`file`: Edited PDF) | `{ message, document }` | AUDIT / VERIFIED |
 
 ### Parameterized Route Slugs Breakdown:
 
-- **`POST /api/pdf/export/:slug`** handles PDF export to office formats:
-  - `POST /api/pdf/export/pdf-to-word` (Converts PDF to Word `.docx`)
-  - `POST /api/pdf/export/pdf-to-excel` (Converts PDF to Excel `.xlsx`)
-  - `POST /api/pdf/export/pdf-to-powerpoint` (Converts PDF to PowerPoint `.pptx`)
+- **`POST /api/v1/jobs`** handles PDF export to office formats:
+  - `POST /api/v1/jobs` (Converts PDF to Word `.docx`)
+  - `POST /api/v1/jobs` (Converts PDF to Excel `.xlsx`)
+  - `POST /api/v1/jobs` (Converts PDF to PowerPoint `.pptx`)
 
-- **`POST /api/pdf/pdf-to-image/:slug`** handles rendering PDF pages into images:
-  - `POST /api/pdf/pdf-to-image/pdf-to-jpg`
-  - `POST /api/pdf/pdf-to-image/pdf-to-png`
+- **`POST /api/v1/jobs`** handles rendering PDF pages into images:
+  - `POST /api/v1/jobs`
+  - `POST /api/v1/jobs`
 
-- **`POST /api/pdf/ui/:slug`** receives client-rendered / canvas-processed PDFs:
-  - `POST /api/pdf/ui/edit-pdf`
-  - `POST /api/pdf/ui/sign-pdf`
-  - `POST /api/pdf/ui/compare-pdf`
-  - `POST /api/pdf/ui/redact-pdf`
-  - `POST /api/pdf/ui/crop-pdf`
-  - `POST /api/pdf/ui/pdf-forms`
+- **`POST /api/v1/jobs`** receives client-rendered / canvas-processed PDFs:
+  - `POST /api/v1/jobs`
+  - `POST /api/v1/jobs`
+  - `POST /api/v1/jobs`
+  - `POST /api/v1/jobs`
+  - `POST /api/v1/jobs`
+  - `POST /api/v1/jobs`
 
 ---
 
 ## 5. Fallback & Validation Error Contract
 
 ### 5.1 Unrecognized Tool Fallback
-If any client sends a request to an unrecognized tool endpoint (`POST /api/pdf/:slug`), the API responds with **HTTP 404**:
+If any client sends a request to an unrecognized tool endpoint (`POST /api/v1/jobs`), the API responds with **HTTP 404**:
 ```json
 {
   "error": "TOOL_NOT_FOUND",

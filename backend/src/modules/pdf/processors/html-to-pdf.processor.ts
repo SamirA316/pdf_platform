@@ -2,6 +2,7 @@ import path from "path";
 import fs from "fs";
 import crypto from "crypto";
 import puppeteer from "puppeteer";
+import { PDFDocument } from "@cantoo/pdf-lib";
 import { prisma } from "../../../common/prisma";
 import { filesService } from "../../files/files.service";
 import { storageService } from "../../files/storage.service";
@@ -16,7 +17,6 @@ export interface IHtmlToPdfJobParams {
   userId: string;
   inputFileId?: string | undefined;
   options?: {
-    url?: string;
     html?: string;
     format?: "A4" | "Letter" | "Legal";
     landscape?: boolean;
@@ -36,7 +36,6 @@ export class HtmlToPdfProcessor {
   async process(params: IHtmlToPdfJobParams): Promise<IHtmlToPdfJobResult> {
     const { jobId, userId, inputFileId, options } = params;
 
-    let targetUrl = options?.url ? String(options.url).trim() : undefined;
     let htmlContent = options?.html ? String(options.html).trim() : undefined;
     let baseName = "webpage";
 
@@ -54,8 +53,8 @@ export class HtmlToPdfProcessor {
       }
     }
 
-    if (!targetUrl && !htmlContent) {
-      throw new ProcessingFailedError("Either an HTML file, raw HTML content, or website URL is required.");
+    if (!htmlContent) {
+      throw new ProcessingFailedError("Either an HTML file or raw HTML content is required.");
     }
 
     const userDir = storageService.getUserStorageDir(userId);
@@ -70,21 +69,24 @@ export class HtmlToPdfProcessor {
 
       browser = await puppeteer.launch({
         headless: true,
-        args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+        args: ["--disable-dev-shm-usage"],
       });
 
       const page = await browser.newPage();
 
-      if (targetUrl) {
-        if (!targetUrl.startsWith("http://") && !targetUrl.startsWith("https://")) {
-          targetUrl = "https://" + targetUrl;
+      // Security Hardening: Disable JS and block ALL external network requests
+      await page.setJavaScriptEnabled(false);
+      await page.setRequestInterception(true);
+      page.on('request', (req) => {
+        const url = req.url().toLowerCase();
+        if (url.startsWith('data:') || url === 'about:blank') {
+          req.continue();
+        } else {
+          req.abort('accessdenied');
         }
-        await page.goto(targetUrl, { waitUntil: "networkidle2", timeout: 30000 });
-        try {
-          const parsed = new URL(targetUrl);
-          baseName = parsed.hostname.replace(/[^a-zA-Z0-9.-]/g, "_");
-        } catch {}
-      } else if (htmlContent) {
+      });
+
+      if (htmlContent) {
         await page.setContent(htmlContent, { waitUntil: "load", timeout: 30000 });
       }
 
@@ -103,6 +105,9 @@ export class HtmlToPdfProcessor {
       const outputName = `${baseName}.pdf`;
       const outputSize = pdfBuffer.length;
 
+      const pdfDoc = await PDFDocument.load(pdfBuffer);
+      const actualPageCount = pdfDoc.getPageCount();
+
       const outputFile = await filesService.createFile(
         userId,
         outputName,
@@ -115,7 +120,7 @@ export class HtmlToPdfProcessor {
       return {
         outputFileId: outputFile.id,
         metrics: {
-          pageCount: 1,
+          pageCount: actualPageCount,
           outputSize,
         },
       };

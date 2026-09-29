@@ -1,3 +1,4 @@
+import path from "path";
 import { FileRenameInvalidError, BadRequestError } from "../../common/errors/AppError";
 import { FileStatus, AllowedSortField, AllowedSortOrder, IValidatedListFilesQuery } from "./files.types";
 
@@ -7,9 +8,9 @@ import { FileStatus, AllowedSortField, AllowedSortOrder, IValidatedListFilesQuer
  * - Non-empty
  * - Max length 255 characters
  * - No path traversal or illegal characters (/, \, null bytes, control characters)
- * - Automatically ensures .pdf extension is preserved
+ * - Automatically ensures original extension is preserved
  */
-export function validateAndSanitizePdfName(inputName?: string): string {
+export function validateAndSanitizeFileName(inputName?: string, originalExt?: string): string {
   if (!inputName || typeof inputName !== "string") {
     throw new FileRenameInvalidError("A valid file name must be provided.");
   }
@@ -30,9 +31,11 @@ export function validateAndSanitizePdfName(inputName?: string): string {
     throw new FileRenameInvalidError("Invalid file name.");
   }
 
-  // Ensure .pdf extension is preserved
-  if (!trimmed.toLowerCase().endsWith(".pdf")) {
-    trimmed = `${trimmed}.pdf`;
+  if (originalExt) {
+    const ext = originalExt.toLowerCase();
+    if (ext && !trimmed.toLowerCase().endsWith(ext)) {
+      trimmed += ext;
+    }
   }
 
   if (trimmed.length > 255) {

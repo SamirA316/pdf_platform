@@ -17,7 +17,7 @@ import {
   StorageQuotaExceededError,
   BadRequestError,
 } from "../../common/errors/AppError";
-import { validateAndSanitizePdfName, validateFileStatus, validateListFilesQuery, ALLOWED_SORT_FIELDS } from "./files.validation";
+import { validateAndSanitizeFileName, validateFileStatus, validateListFilesQuery, ALLOWED_SORT_FIELDS } from "./files.validation";
 import { getMaxFileSizeBytes, getUserStorageQuotaBytes } from "./files.constants";
 import { storageService } from "./storage.service";
 import { logger } from "../../common/logger";
@@ -372,8 +372,6 @@ export class FilesService {
       throw new FileNotFoundError("File not found.");
     }
 
-    const sanitizedName = validateAndSanitizePdfName(newName);
-
     const file = await prisma.file.findFirst({
       where: {
         id: fileId,
@@ -384,6 +382,8 @@ export class FilesService {
     if (!file) {
       throw new FileNotFoundError("File not found.");
     }
+
+    const sanitizedName = validateAndSanitizeFileName(newName, path.extname(file.originalName));
 
     const updated = await prisma.file.update({
       where: { id: fileId },

@@ -38,6 +38,7 @@ import {
   extractDocumentDimensions,
   destroyPdfDocument,
 } from "./pdf/pdfDocument";
+import { API_BASE_URL } from "../api/client";
 
 export const DEFAULT_ACTIVE_PROPERTIES: IEditorActiveProperties = {
   color: "#1e293b",
@@ -680,7 +681,7 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
       setError(null);
 
       try {
-        const response = await fetch(`/api/v1/files/${targetFileId}/download`);
+        const response = await fetch(`${API_BASE_URL}/api/v1/files/${targetFileId}/download`);
 
         // Handle non-200 responses
         if (!response.ok) {

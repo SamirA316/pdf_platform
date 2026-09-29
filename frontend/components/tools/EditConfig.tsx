@@ -2185,199 +2185,204 @@ export function EditConfig({ files, onProcess, slug }: EditConfigProps) {
       {/* ========================================================================= */}
       {/* MAIN TOP TOOLBAR                                                          */}
       {/* ========================================================================= */}
-      <div className="w-full bg-white border border-gray-200 shadow-md rounded-2xl p-2.5 mb-3 flex flex-wrap items-center justify-between gap-2.5 sticky top-3 z-40">
+      <div className="w-full bg-white/95 backdrop-blur-md border border-slate-200/90 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.06)] rounded-2xl p-2 mb-3.5 flex items-center justify-between gap-2.5 sticky top-3 z-40 overflow-x-auto no-scrollbar">
         
-        {/* Tools Group */}
-        <div className="flex items-center gap-1 bg-gray-50 p-1 rounded-xl border border-gray-200">
-          <button
-            type="button"
-            onClick={() => {
-              setActiveTool("select");
-              setActiveTextId(null);
-            }}
-            className={`px-2.5 py-1.5 rounded-lg font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
-              activeTool === "select" ? "bg-[#E5322D] text-white shadow-sm" : "text-gray-600 hover:text-black hover:bg-gray-200"
-            }`}
-            title="Select tool"
-          >
-            <MousePointer className="w-4 h-4" />
-            <span>Select</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setActiveTool("edit-text");
-              setActiveEmbeddedImgId(null);
-              setActiveImageId(null);
-            }}
-            className={`px-2.5 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
-              activeTool === "edit-text" ? "bg-[#E5322D] text-white shadow-sm" : "text-gray-600 hover:text-black hover:bg-gray-200"
-            }`}
-            title="Click any text on the page to edit in place"
-          >
-            <Sparkles className="w-4 h-4" />
-            <span>Edit Text</span>
-            {textList.filter(t => t.page === currentPage).length > 0 && (
-              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-extrabold ${
-                activeTool === "edit-text" ? "bg-white/30 text-white" : "bg-blue-100 text-blue-700"
-              }`}>
-                {textList.filter(t => t.page === currentPage).length}
-              </span>
-            )}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTool("add-text")}
-            className={`px-2.5 py-1.5 rounded-lg font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
-              activeTool === "add-text" ? "bg-[#E5322D] text-white shadow-sm" : "text-gray-600 hover:text-black hover:bg-gray-200"
-            }`}
-            title="Click anywhere to add a new text box"
-          >
-            <Type className="w-4 h-4" />
-            <span>Add Text</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setShowSignatureModal(true)}
-            className="px-2.5 py-1.5 rounded-lg font-semibold text-xs flex items-center gap-1.5 text-blue-600 hover:bg-blue-50 transition-all cursor-pointer"
-            title="Draw or type signature"
-          >
-            <FileSignature className="w-4 h-4" />
-            <span>Sign</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => imageInputRef.current?.click()}
-            className="px-2.5 py-1.5 rounded-lg font-semibold text-xs flex items-center gap-1.5 text-gray-700 hover:bg-gray-200 transition-all cursor-pointer"
-            title="Add image"
-          >
-            <ImageIcon className="w-4 h-4 text-amber-600" />
-            <span>Image</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTool("whiteout")}
-            className={`px-2.5 py-1.5 rounded-lg font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
-              activeTool === "whiteout" ? "bg-[#E5322D] text-white shadow-sm" : "text-gray-600 hover:text-black hover:bg-gray-200"
-            }`}
-            title="Drag to erase/whiteout content"
-          >
-            <Eraser className="w-4 h-4" />
-            <span>Whiteout</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTool("shape")}
-            className={`px-2.5 py-1.5 rounded-lg font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
-              activeTool === "shape" ? "bg-[#E5322D] text-white shadow-sm" : "text-gray-600 hover:text-black hover:bg-gray-200"
-            }`}
-            title="Draw shapes"
-          >
-            <Square className="w-4 h-4" />
-            <span>Shapes</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTool("draw")}
-            className={`px-2.5 py-1.5 rounded-lg font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
-              activeTool === "draw" ? "bg-[#E5322D] text-white shadow-sm" : "text-gray-600 hover:text-black hover:bg-gray-200"
-            }`}
-            title="Pen"
-          >
-            <PenLine className="w-4 h-4" />
-            <span>Pen</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTool("highlight")}
-            className={`px-2.5 py-1.5 rounded-lg font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
-              activeTool === "highlight" ? "bg-[#E5322D] text-white shadow-sm" : "text-gray-600 hover:text-black hover:bg-gray-200"
-            }`}
-            title="Highlighter"
-          >
-            <Highlighter className="w-4 h-4 text-amber-500" />
-            <span>Highlight</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setShowFindReplace(prev => !prev)}
-            className={`px-2.5 py-1.5 rounded-lg font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
-              showFindReplace ? "bg-purple-600 text-white shadow-sm" : "text-gray-600 hover:text-black hover:bg-gray-200"
-            }`}
-            title="Find & Replace text"
-          >
-            <Search className="w-4 h-4 text-purple-600" />
-            <span>Find & Replace</span>
-          </button>
-        </div>
-
-        {/* Shape Sub-selector */}
-        {activeTool === "shape" && (
-          <div className="flex items-center gap-1 bg-amber-50 px-2 py-1 rounded-xl border border-amber-200 text-xs">
-            <span className="text-amber-800 font-bold">Shape:</span>
+        {/* Left: Tools Group */}
+        <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex items-center gap-0.5 bg-slate-100/90 p-1 rounded-xl border border-slate-200/60">
             <button
               type="button"
-              onClick={() => setSelectedShapeType("rectangle")}
-              className={`p-1 rounded cursor-pointer ${selectedShapeType === "rectangle" ? "bg-amber-600 text-white" : "text-gray-700 hover:bg-amber-100"}`}
-              title="Rectangle"
+              onClick={() => {
+                setActiveTool("select");
+                setActiveTextId(null);
+              }}
+              className={`px-3 py-1.5 rounded-lg font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                activeTool === "select" ? "bg-[#E5322D] text-white shadow-xs" : "text-slate-600 hover:text-slate-900 hover:bg-white/80"
+              }`}
+              title="Select tool"
+            >
+              <MousePointer className="w-3.5 h-3.5" />
+              <span>Select</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTool("edit-text");
+                setActiveEmbeddedImgId(null);
+                setActiveImageId(null);
+              }}
+              className={`px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                activeTool === "edit-text" ? "bg-[#E5322D] text-white shadow-xs" : "text-slate-600 hover:text-slate-900 hover:bg-white/80"
+              }`}
+              title="Click any text on the page to edit in place"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Edit Text</span>
+              {textList.filter(t => t.page === currentPage).length > 0 && (
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-extrabold ${
+                  activeTool === "edit-text" ? "bg-white/30 text-white" : "bg-blue-100 text-blue-700"
+                }`}>
+                  {textList.filter(t => t.page === currentPage).length}
+                </span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTool("add-text")}
+              className={`px-3 py-1.5 rounded-lg font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                activeTool === "add-text" ? "bg-[#E5322D] text-white shadow-xs" : "text-slate-600 hover:text-slate-900 hover:bg-white/80"
+              }`}
+              title="Click anywhere to add a new text box"
+            >
+              <Type className="w-3.5 h-3.5" />
+              <span>Add Text</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowSignatureModal(true)}
+              className="px-3 py-1.5 rounded-lg font-semibold text-xs flex items-center gap-1.5 text-blue-600 hover:bg-blue-50/80 transition-all cursor-pointer"
+              title="Draw or type signature"
+            >
+              <FileSignature className="w-3.5 h-3.5" />
+              <span>Sign</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => imageInputRef.current?.click()}
+              className="px-3 py-1.5 rounded-lg font-semibold text-xs flex items-center gap-1.5 text-slate-700 hover:bg-white/80 transition-all cursor-pointer"
+              title="Add image"
+            >
+              <ImageIcon className="w-3.5 h-3.5 text-amber-600" />
+              <span>Image</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTool("whiteout")}
+              className={`px-3 py-1.5 rounded-lg font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                activeTool === "whiteout" ? "bg-[#E5322D] text-white shadow-xs" : "text-slate-600 hover:text-slate-900 hover:bg-white/80"
+              }`}
+              title="Drag to erase/whiteout content"
+            >
+              <Eraser className="w-3.5 h-3.5" />
+              <span>Whiteout</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTool("shape")}
+              className={`px-3 py-1.5 rounded-lg font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                activeTool === "shape" ? "bg-[#E5322D] text-white shadow-xs" : "text-slate-600 hover:text-slate-900 hover:bg-white/80"
+              }`}
+              title="Draw shapes"
             >
               <Square className="w-3.5 h-3.5" />
+              <span>Shapes</span>
             </button>
+
             <button
               type="button"
-              onClick={() => setSelectedShapeType("circle")}
-              className={`p-1 rounded cursor-pointer ${selectedShapeType === "circle" ? "bg-amber-600 text-white" : "text-gray-700 hover:bg-amber-100"}`}
-              title="Circle"
+              onClick={() => setActiveTool("draw")}
+              className={`px-3 py-1.5 rounded-lg font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                activeTool === "draw" ? "bg-[#E5322D] text-white shadow-xs" : "text-slate-600 hover:text-slate-900 hover:bg-white/80"
+              }`}
+              title="Pen"
             >
-              <Circle className="w-3.5 h-3.5" />
+              <PenLine className="w-3.5 h-3.5" />
+              <span>Pen</span>
             </button>
+
             <button
               type="button"
-              onClick={() => setSelectedShapeType("line")}
-              className={`p-1 rounded cursor-pointer ${selectedShapeType === "line" ? "bg-amber-600 text-white" : "text-gray-700 hover:bg-amber-100"}`}
-              title="Line"
+              onClick={() => setActiveTool("highlight")}
+              className={`px-3 py-1.5 rounded-lg font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                activeTool === "highlight" ? "bg-[#E5322D] text-white shadow-xs" : "text-slate-600 hover:text-slate-900 hover:bg-white/80"
+              }`}
+              title="Highlighter"
             >
-              <Minus className="w-3.5 h-3.5" />
+              <Highlighter className="w-3.5 h-3.5 text-amber-500" />
+              <span>Highlight</span>
             </button>
+
             <button
               type="button"
-              onClick={() => setSelectedShapeType("arrow")}
-              className={`p-1 rounded cursor-pointer ${selectedShapeType === "arrow" ? "bg-amber-600 text-white" : "text-gray-700 hover:bg-amber-100"}`}
-              title="Arrow"
+              onClick={() => setShowFindReplace(prev => !prev)}
+              className={`px-3 py-1.5 rounded-lg font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                showFindReplace ? "bg-purple-600 text-white shadow-xs" : "text-slate-600 hover:text-slate-900 hover:bg-white/80"
+              }`}
+              title="Find & Replace text"
             >
-              <MoveUpRight className="w-3.5 h-3.5" />
+              <Search className="w-3.5 h-3.5 text-purple-600" />
+              <span className="hidden sm:inline">Find & Replace</span>
             </button>
           </div>
-        )}
 
-        {/* Center/Right: Navigation, Zoom & Save */}
-        <div className="flex items-center gap-2">
+          {/* Shape Sub-selector */}
+          {activeTool === "shape" && (
+            <div className="flex items-center gap-1 bg-amber-50/90 px-2 py-1 rounded-xl border border-amber-200 text-xs shrink-0">
+              <span className="text-amber-800 font-bold text-[11px]">Shape:</span>
+              <button
+                type="button"
+                onClick={() => setSelectedShapeType("rectangle")}
+                className={`p-1 rounded-lg cursor-pointer transition-colors ${selectedShapeType === "rectangle" ? "bg-amber-600 text-white shadow-xs" : "text-slate-700 hover:bg-amber-100"}`}
+                title="Rectangle"
+              >
+                <Square className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedShapeType("circle")}
+                className={`p-1 rounded-lg cursor-pointer transition-colors ${selectedShapeType === "circle" ? "bg-amber-600 text-white shadow-xs" : "text-slate-700 hover:bg-amber-100"}`}
+                title="Circle"
+              >
+                <Circle className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedShapeType("line")}
+                className={`p-1 rounded-lg cursor-pointer transition-colors ${selectedShapeType === "line" ? "bg-amber-600 text-white shadow-xs" : "text-slate-700 hover:bg-amber-100"}`}
+                title="Line"
+              >
+                <Minus className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedShapeType("arrow")}
+                className={`p-1 rounded-lg cursor-pointer transition-colors ${selectedShapeType === "arrow" ? "bg-amber-600 text-white shadow-xs" : "text-slate-700 hover:bg-amber-100"}`}
+                title="Arrow"
+              >
+                <MoveUpRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Vertical Divider */}
+        <div className="h-6 w-px bg-slate-200 shrink-0 hidden md:block" />
+
+        {/* Right: Navigation, Zoom & Save */}
+        <div className="flex items-center gap-2 shrink-0">
           {/* Toggle Thumbnails Sidebar */}
           {totalPages > 0 && (
             <button
               type="button"
               onClick={() => setShowThumbnailsSidebar(prev => !prev)}
               className={`px-2.5 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                showThumbnailsSidebar ? "bg-blue-50 text-blue-600 border-blue-200" : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100"
+                showThumbnailsSidebar ? "bg-blue-50 text-blue-600 border-blue-200 shadow-2xs" : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
               }`}
               title="Toggle Pages Sidebar"
             >
-              <Layers className="w-4 h-4" />
-              <span className="hidden sm:inline">Pages ({totalPages})</span>
+              <Layers className="w-3.5 h-3.5" />
+              <span className="hidden lg:inline">Pages ({totalPages})</span>
             </button>
           )}
 
           {totalPages > 1 && (
-            <div className="flex items-center gap-1 bg-gray-50 px-2 py-1 rounded-xl border border-gray-200 text-xs font-semibold text-gray-700">
+            <div className="flex items-center gap-1 bg-slate-50 px-2 py-1 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700">
               <button
                 type="button"
                 disabled={currentPage <= 1}
@@ -2385,11 +2390,11 @@ export function EditConfig({ files, onProcess, slug }: EditConfigProps) {
                   setCurrentPage(p => Math.max(1, p - 1));
                   setActiveTextId(null);
                 }}
-                className="p-1 hover:bg-white rounded disabled:opacity-30 cursor-pointer"
+                className="p-1 hover:bg-white hover:shadow-xs rounded-md disabled:opacity-30 cursor-pointer transition-all"
               >
-                <ChevronLeft className="w-4 h-4" />
+                <ChevronLeft className="w-3.5 h-3.5" />
               </button>
-              <span>{currentPage} / {totalPages}</span>
+              <span className="text-[11px] whitespace-nowrap">{currentPage} / {totalPages}</span>
               <button
                 type="button"
                 disabled={currentPage >= totalPages}
@@ -2397,9 +2402,9 @@ export function EditConfig({ files, onProcess, slug }: EditConfigProps) {
                   setCurrentPage(p => Math.min(totalPages, p + 1));
                   setActiveTextId(null);
                 }}
-                className="p-1 hover:bg-white rounded disabled:opacity-30 cursor-pointer"
+                className="p-1 hover:bg-white hover:shadow-xs rounded-md disabled:opacity-30 cursor-pointer transition-all"
               >
-                <ChevronRight className="w-4 h-4" />
+                <ChevronRight className="w-3.5 h-3.5" />
               </button>
             </div>
           )}
@@ -2408,54 +2413,54 @@ export function EditConfig({ files, onProcess, slug }: EditConfigProps) {
           <button
             type="button"
             onClick={handleRotatePage}
-            className="p-1.5 bg-gray-50 hover:bg-gray-100 rounded-xl border border-gray-200 text-gray-600 cursor-pointer"
+            className="p-1.5 bg-slate-50 hover:bg-slate-100 rounded-xl border border-slate-200 text-slate-600 cursor-pointer transition-colors"
             title="Rotate Page 90° Clockwise"
           >
-            <RotateCw className="w-4 h-4" />
+            <RotateCw className="w-3.5 h-3.5" />
           </button>
 
           {/* Zoom Controls */}
-          <div className="flex items-center gap-1 bg-gray-50 p-1 rounded-xl border border-gray-200">
+          <div className="flex items-center gap-0.5 bg-slate-50 p-1 rounded-xl border border-slate-200">
             <button
               type="button"
               onClick={() => setZoom(z => Math.max(0.6, z - 0.2))}
-              className="p-1 hover:bg-white rounded text-gray-600 cursor-pointer"
+              className="p-1 hover:bg-white hover:shadow-xs rounded-md text-slate-600 cursor-pointer transition-all"
               title="Zoom Out"
             >
-              <ZoomOut className="w-4 h-4" />
+              <ZoomOut className="w-3.5 h-3.5" />
             </button>
-            <span className="text-xs font-semibold text-gray-600 min-w-[2.5rem] text-center">
+            <span className="text-[11px] font-bold text-slate-700 min-w-[2.6rem] text-center">
               {Math.round(zoom * 100)}%
             </span>
             <button
               type="button"
               onClick={() => setZoom(z => Math.min(2.2, z + 0.2))}
-              className="p-1 hover:bg-white rounded text-gray-600 cursor-pointer"
+              className="p-1 hover:bg-white hover:shadow-xs rounded-md text-slate-600 cursor-pointer transition-all"
               title="Zoom In"
             >
-              <ZoomIn className="w-4 h-4" />
+              <ZoomIn className="w-3.5 h-3.5" />
             </button>
           </div>
 
           {/* Undo / Redo */}
-          <div className="flex items-center gap-1 bg-gray-50 p-1 rounded-xl border border-gray-200">
+          <div className="flex items-center gap-0.5 bg-slate-50 p-1 rounded-xl border border-slate-200">
             <button
               type="button"
               onClick={handleUndo}
               disabled={undoStack.length === 0}
-              className="p-1.5 hover:bg-white rounded text-gray-600 disabled:opacity-30 cursor-pointer"
+              className="p-1 hover:bg-white hover:shadow-xs rounded-md text-slate-600 disabled:opacity-30 cursor-pointer transition-all"
               title="Undo (Ctrl+Z)"
             >
-              <Undo2 className="w-4 h-4" />
+              <Undo2 className="w-3.5 h-3.5" />
             </button>
             <button
               type="button"
               onClick={handleRedo}
               disabled={redoStack.length === 0}
-              className="p-1.5 hover:bg-white rounded text-gray-600 disabled:opacity-30 cursor-pointer"
+              className="p-1 hover:bg-white hover:shadow-xs rounded-md text-slate-600 disabled:opacity-30 cursor-pointer transition-all"
               title="Redo (Ctrl+Shift+Z)"
             >
-              <Redo2 className="w-4 h-4" />
+              <Redo2 className="w-3.5 h-3.5" />
             </button>
           </div>
 
@@ -2464,16 +2469,16 @@ export function EditConfig({ files, onProcess, slug }: EditConfigProps) {
             type="button"
             onClick={handleSaveAndProcess}
             disabled={isSaving}
-            className="cursor-pointer bg-[#E5322D] hover:bg-[#CC2A26] text-white px-5 py-2 rounded-xl font-bold text-xs shadow-md flex items-center gap-2 active:scale-95 transition-all disabled:opacity-75"
+            className="cursor-pointer bg-gradient-to-r from-[#E5322D] to-[#D92D27] hover:from-[#CC2A26] hover:to-[#C02622] text-white px-4 py-2 rounded-xl font-bold text-xs shadow-sm hover:shadow-md flex items-center gap-2 active:scale-95 transition-all disabled:opacity-75 shrink-0"
           >
             {isSaving ? (
               <>
-                <Loader2 className="w-4 h-4 animate-spin" />
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 <span>Saving...</span>
               </>
             ) : (
               <>
-                <Download className="w-4 h-4" />
+                <Download className="w-3.5 h-3.5" />
                 <span>{isSignTool ? "Sign & Download PDF" : "Save & Download PDF"}</span>
               </>
             )}
@@ -2563,18 +2568,18 @@ export function EditConfig({ files, onProcess, slug }: EditConfigProps) {
       {/* ========================================================================= */}
       {/* STUDIO LAYOUT: Left Page Thumbnails Sidebar + Main Document Canvas        */}
       {/* ========================================================================= */}
-      <div className="w-full flex items-start gap-3 justify-center">
+      <div className="w-full flex items-start gap-4 justify-center">
         {/* Left Thumbnails Sidebar */}
         {showThumbnailsSidebar && totalPages > 0 && (
-          <div className="w-48 shrink-0 bg-white border border-gray-200 rounded-3xl p-3 shadow-md flex flex-col gap-2.5 sticky top-20 max-h-[78vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-2 border-b border-gray-100">
-              <span className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
+          <div className="w-52 shrink-0 bg-white/95 backdrop-blur-md border border-slate-200/90 rounded-2xl p-3 shadow-xs flex flex-col gap-2.5 sticky top-20 max-h-[82vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                 <Layers className="w-3.5 h-3.5 text-blue-600" /> Pages ({totalPages})
               </span>
               <button
                 type="button"
                 onClick={() => setShowThumbnailsSidebar(false)}
-                className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-black cursor-pointer"
+                className="p-1 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-700 cursor-pointer transition-colors"
                 title="Hide Thumbnails Sidebar"
               >
                 <PanelLeftClose className="w-3.5 h-3.5" />
@@ -2582,7 +2587,7 @@ export function EditConfig({ files, onProcess, slug }: EditConfigProps) {
             </div>
 
             {/* List of Pages */}
-            <div className="flex flex-col gap-2.5">
+            <div className="flex flex-col gap-2">
               {Array.from({ length: totalPages }, (_, i) => i + 1).map(pNum => {
                 const isActive = currentPage === pNum;
                 const thumbUrl = pageThumbnails[pNum];
@@ -2599,16 +2604,16 @@ export function EditConfig({ files, onProcess, slug }: EditConfigProps) {
                     }}
                     className={`group relative rounded-xl p-1.5 border-2 transition-all cursor-pointer ${
                       isActive
-                        ? "border-blue-600 bg-blue-50/50 shadow-md ring-2 ring-blue-100"
-                        : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+                        ? "border-blue-600 bg-blue-50/50 shadow-xs ring-2 ring-blue-500/20"
+                        : "border-slate-200/80 hover:border-slate-300 hover:bg-slate-50/80"
                     }`}
                   >
                     {/* Thumbnail Image */}
-                    <div className="w-full aspect-[1/1.3] bg-white rounded-lg border border-gray-200 overflow-hidden flex items-center justify-center shadow-xs">
+                    <div className="w-full aspect-[1/1.3] bg-white rounded-lg border border-slate-200 overflow-hidden flex items-center justify-center shadow-[0_2px_4px_rgba(0,0,0,0.04)]">
                       {thumbUrl ? (
                         <img src={thumbUrl} alt={`Page ${pNum}`} className="w-full h-full object-contain pointer-events-none" />
                       ) : (
-                        <div className="flex flex-col items-center justify-center text-gray-400 gap-1 text-[10px]">
+                        <div className="flex flex-col items-center justify-center text-slate-400 gap-1 text-[10px]">
                           <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500" />
                           <span>Scanning...</span>
                         </div>
@@ -2616,12 +2621,12 @@ export function EditConfig({ files, onProcess, slug }: EditConfigProps) {
                     </div>
 
                     {/* Page Number & Stats */}
-                    <div className="flex items-center justify-between mt-1 px-1">
-                      <span className={`text-[11px] font-bold ${isActive ? "text-blue-700" : "text-gray-700"}`}>
+                    <div className="flex items-center justify-between mt-1.5 px-0.5">
+                      <span className={`text-[11px] font-bold ${isActive ? "text-blue-700" : "text-slate-700"}`}>
                         Page {pNum}
                       </span>
                       {stats && (
-                        <span className="text-[9px] font-medium text-gray-400">
+                        <span className="text-[9px] font-semibold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
                           {stats.texts}T • {stats.images}Img
                         </span>
                       )}
@@ -2637,7 +2642,7 @@ export function EditConfig({ files, onProcess, slug }: EditConfigProps) {
                           [pNum]: ((prev[pNum] || 0) + 90) % 360
                         }));
                       }}
-                      className="absolute top-2 right-2 p-1 bg-white/90 hover:bg-white text-gray-700 rounded-md shadow-sm border border-gray-200 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                      className="absolute top-2.5 right-2.5 p-1 bg-white/95 hover:bg-white text-slate-700 rounded-md shadow-xs border border-slate-200 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
                       title="Rotate Page 90° Clockwise"
                     >
                       <RotateCw className="w-3 h-3" />
@@ -2654,7 +2659,7 @@ export function EditConfig({ files, onProcess, slug }: EditConfigProps) {
           <button
             type="button"
             onClick={() => setShowThumbnailsSidebar(true)}
-            className="p-2.5 bg-white border border-gray-200 rounded-2xl shadow-md text-gray-600 hover:text-blue-600 hover:bg-gray-50 sticky top-20 cursor-pointer"
+            className="p-2.5 bg-white border border-slate-200 rounded-2xl shadow-xs text-slate-600 hover:text-blue-600 hover:bg-slate-50 sticky top-20 cursor-pointer transition-all"
             title="Show Pages Sidebar"
           >
             <PanelLeftOpen className="w-4 h-4" />
@@ -2662,48 +2667,53 @@ export function EditConfig({ files, onProcess, slug }: EditConfigProps) {
         )}
 
         {/* Main Document Canvas Container */}
-        <div className="flex-1 min-w-0 flex justify-center">
+        <div className="flex-1 min-w-0 flex flex-col items-center">
           <div
             ref={containerRef}
-        onClick={handleCanvasClick}
-        onDragOver={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          e.dataTransfer.dropEffect = "copy";
-          setIsDragOverCanvas(true);
-        }}
-        onDragEnter={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          setIsDragOverCanvas(true);
-        }}
-        onDragLeave={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          const rect = containerRef.current?.getBoundingClientRect();
-          if (rect) {
-            if (e.clientX <= rect.left || e.clientX >= rect.right || e.clientY <= rect.top || e.clientY >= rect.bottom) {
+            onClick={handleCanvasClick}
+            onDragOver={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              e.dataTransfer.dropEffect = "copy";
+              setIsDragOverCanvas(true);
+            }}
+            onDragEnter={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setIsDragOverCanvas(true);
+            }}
+            onDragLeave={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              const rect = containerRef.current?.getBoundingClientRect();
+              if (rect) {
+                if (e.clientX <= rect.left || e.clientX >= rect.right || e.clientY <= rect.top || e.clientY >= rect.bottom) {
+                  setIsDragOverCanvas(false);
+                }
+              }
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
               setIsDragOverCanvas(false);
-            }
-          }
-        }}
-        onDrop={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          setIsDragOverCanvas(false);
-          handleImageDropOnCanvas(e);
-        }}
-        className={`relative bg-gray-200/80 p-6 rounded-3xl border-2 transition-colors ${
-          isDragOverCanvas ? "border-dashed border-blue-500 bg-blue-50/70" : "border-transparent"
-        } shadow-inner overflow-auto max-w-full max-h-[78vh] flex justify-center items-start`}
-      >
-        {!isPdfJsLoaded || !pdfDoc ? (
-          <div className="flex flex-col items-center justify-center p-20 text-gray-500 gap-3">
-            <Loader2 className="w-8 h-8 text-[#E5322D] animate-spin" />
-            <p className="font-semibold text-sm">Loading PDF into professional editor...</p>
-          </div>
-        ) : (
-          <div className="relative shadow-2xl rounded-sm bg-white overflow-hidden select-none">
+              handleImageDropOnCanvas(e);
+            }}
+            className={`relative w-full border transition-all duration-200 rounded-2xl overflow-auto min-h-[680px] max-h-[82vh] flex justify-center items-start py-8 sm:py-12 px-4 sm:px-8 ${
+              isDragOverCanvas
+                ? "border-blue-500 bg-blue-50/40 ring-4 ring-blue-500/10"
+                : "border-slate-200/90 bg-[#F1F5F9] shadow-xs"
+            } [background-image:radial-gradient(#CBD5E1_1.2px,transparent_1.2px)] [background-size:24px_24px]`}
+          >
+            {!isPdfJsLoaded || !pdfDoc ? (
+              <div className="flex flex-col items-center justify-center py-32 text-slate-500 gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-white border border-slate-200 shadow-xs flex items-center justify-center">
+                  <Loader2 className="w-6 h-6 text-[#E5322D] animate-spin" />
+                </div>
+                <p className="font-semibold text-sm text-slate-700">Loading document into workspace...</p>
+                <p className="text-xs text-slate-400">Rendering vector text, embedded graphics and layout</p>
+              </div>
+            ) : (
+              <div className="relative bg-white shadow-[0_22px_70px_4px_rgba(15,23,42,0.18),0_0_0_1px_rgba(15,23,42,0.08)] rounded-[2px] overflow-hidden select-none transition-shadow">
             {/* 1. Base PDF Rendered Canvas */}
             <canvas ref={pdfCanvasRef} className="block" />
 
@@ -3447,22 +3457,35 @@ export function EditConfig({ files, onProcess, slug }: EditConfigProps) {
           </div>
         )}
       </div>
+
+        {/* Document Status Bar under canvas */}
+        <div className="mt-2.5 flex items-center justify-between w-full px-2 text-[11px] font-medium text-slate-500">
+          <span className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            Document Studio Ready • Page {currentPage} of {totalPages}
+          </span>
+          <span className="hidden sm:flex items-center gap-2 text-slate-400">
+            <span>Zoom {Math.round(zoom * 100)}%</span>
+            <span>•</span>
+            <span>Original Layout Preserved</span>
+          </span>
         </div>
       </div>
+    </div>
 
-      {/* Footer Info / Tips */}
-      <div className="mt-4 flex flex-wrap items-center justify-center gap-4 text-xs font-medium text-gray-500">
-        <span className="flex items-center gap-1.5">
-          <Sparkles className="w-4 h-4 text-red-500" />
-          Click on any word or line to edit directly in-place.
+      {/* Studio Footer Info / Shortcuts */}
+      <div className="mt-3.5 py-2 px-4 bg-white/70 backdrop-blur-xs rounded-xl border border-slate-200/80 flex flex-wrap items-center justify-center gap-4 text-xs font-medium text-slate-500 shadow-2xs">
+        <span className="flex items-center gap-1.5 text-slate-700">
+          <Sparkles className="w-3.5 h-3.5 text-[#E5322D]" />
+          <span>Click on any word or line to edit directly in-place</span>
         </span>
-        <span>•</span>
-        <span className="flex items-center gap-1.5">
-          <FileSignature className="w-4 h-4 text-blue-600" />
-          Use <strong>Sign</strong> to draw or type an official signature.
+        <span className="text-slate-300">•</span>
+        <span className="flex items-center gap-1.5 text-slate-700">
+          <FileSignature className="w-3.5 h-3.5 text-blue-600" />
+          <span>Use <strong>Sign</strong> to place high-res digital signatures</span>
         </span>
-        <span>•</span>
-        <span>Press <strong>Enter</strong> or click <strong>Done</strong> to save text.</span>
+        <span className="text-slate-300">•</span>
+        <span>Press <strong>Enter</strong> or click outside to confirm changes</span>
       </div>
     </div>
   );

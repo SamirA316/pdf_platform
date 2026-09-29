@@ -8,7 +8,7 @@ import { filesController } from "./files.controller";
 import { BadRequestError, UnsupportedFormatError } from "../../common/errors/AppError";
 
 import { storageService } from "./storage.service";
-import { verifyFileMagicBytes } from "../../middlewares/upload.middleware";
+import { verifyFileMagicBytes, EXT_MIME_MAP, fileFilter } from "../../middlewares/upload.middleware";
 import { getMaxFileSizeBytes } from "./files.constants";
 
 const router = Router();
@@ -26,44 +26,15 @@ const fileStorage = multer.diskStorage({
   filename: (req, file, cb) => {
     const randomHex = crypto.randomBytes(8).toString("hex");
     const ext = path.extname(file.originalname).toLowerCase();
-    const safeExt = [".pdf", ".png", ".jpg", ".jpeg"].includes(ext) ? ext : ".pdf";
+    const safeExt = EXT_MIME_MAP[ext] ? ext : ".pdf";
     cb(null, `file_${randomHex}${safeExt}`);
   },
 });
 
-const pdfOnlyFilter = (req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
-  const ext = path.extname(file.originalname).toLowerCase();
-  const mime = (file.mimetype || "").toLowerCase();
-
-  const allowImage =
-    req.query?.type === "image" ||
-    req.query?.allowImages === "true" ||
-    req.headers?.["x-allow-image"] === "true";
-
-  if (allowImage) {
-    const isImage =
-      [".png", ".jpg", ".jpeg"].includes(ext) &&
-      ["image/png", "image/jpeg", "image/jpg"].includes(mime);
-    const isPdf = ext === ".pdf" && mime === "application/pdf";
-    if (!isImage && !isPdf) {
-      return cb(
-        new UnsupportedFormatError("Allowed formats: .png, .jpg, .jpeg, .pdf")
-      );
-    }
-    return cb(null, true);
-  }
-
-  if (ext !== ".pdf" || mime !== "application/pdf") {
-    return cb(new UnsupportedFormatError("Only PDF files are supported. Allowed MIME: application/pdf, extension: .pdf"));
-  }
-
-  cb(null, true);
-};
-
-export const uploadSinglePdf = (req: any, res: any, next: any) => {
+export const uploadSingleFile = (req: any, res: any, next: any) => {
   multer({
     storage: fileStorage,
-    fileFilter: pdfOnlyFilter,
+    fileFilter: fileFilter,
     limits: {
       fileSize: getMaxFileSizeBytes(),
       files: 1, // Single file upload for /api/v1/files
@@ -98,7 +69,7 @@ export const uploadSinglePdf = (req: any, res: any, next: any) => {
 router.post(
   "/",
   requireStrictAuth,
-  uploadSinglePdf,
+  uploadSingleFile,
   (req, res, next) => filesController.uploadFile(req, res, next)
 );
 
