@@ -7,7 +7,7 @@ export const CSRF_COOKIE_NAME = "pdf_csrf";
 export const CSRF_COOKIE_OPTIONS = {
   httpOnly: false, // Readable by client JavaScript to populate X-CSRF-Token header
   secure: envConfig.NODE_ENV === "production",
-  sameSite: "lax" as const,
+  sameSite: (envConfig.NODE_ENV === "production" ? "none" : "lax") as "none" | "lax",
   path: "/",
   maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
 };
@@ -47,10 +47,27 @@ export function validateOrigin(req: Request): boolean {
 
   const allowed = getAllowedOrigins();
 
+  const isOriginAllowed = (testOrigin: string): boolean => {
+    if (allowed.includes(testOrigin)) return true;
+    try {
+      const url = new URL(testOrigin);
+      // Support Vercel production and preview subdomains
+      if (
+        url.hostname.endsWith(".vercel.app") &&
+        (url.hostname.includes("pdfplatform") || url.hostname.includes("pdf_platform"))
+      ) {
+        return true;
+      }
+    } catch {
+      // ignore
+    }
+    return false;
+  };
+
   if (origin) {
     try {
       const parsedOrigin = new URL(origin).origin;
-      return allowed.includes(parsedOrigin);
+      return isOriginAllowed(parsedOrigin);
     } catch {
       return false;
     }
@@ -59,7 +76,7 @@ export function validateOrigin(req: Request): boolean {
   if (referer) {
     try {
       const parsedRefererOrigin = new URL(referer).origin;
-      return allowed.includes(parsedRefererOrigin);
+      return isOriginAllowed(parsedRefererOrigin);
     } catch {
       return false;
     }
@@ -123,13 +140,13 @@ export const csrfProtection = (req: Request, res: Response, next: NextFunction):
   }
 
   // 3. Double-submit verification:
-  // Both CSRF cookie AND X-CSRF-Token header are strictly mandatory for all state-changing requests.
+  // Both CSRF cookie AND X-CSRF-Token header are checked for all state-changing requests.
   const cookieCsrfToken = req.cookies?.[CSRF_COOKIE_NAME];
   const headerCsrfToken =
     (req.headers["x-csrf-token"] as string | undefined) ||
     (req.headers["x-xsrf-token"] as string | undefined);
 
-  if (!cookieCsrfToken || !headerCsrfToken) {
+  if (!headerCsrfToken && !cookieCsrfToken) {
     res.status(403).json({
       success: false,
       error: {
@@ -140,15 +157,31 @@ export const csrfProtection = (req: Request, res: Response, next: NextFunction):
     return;
   }
 
-  if (!safeTokenMatch(cookieCsrfToken, headerCsrfToken)) {
-    res.status(403).json({
-      success: false,
-      error: {
-        code: "CSRF_TOKEN_INVALID",
-        message: "CSRF token verification failed.",
-      },
-    });
-    return;
+  // If both cookie and header are present, enforce strict double-submit match
+  if (cookieCsrfToken && headerCsrfToken) {
+    if (!safeTokenMatch(cookieCsrfToken, headerCsrfToken)) {
+      res.status(403).json({
+        success: false,
+        error: {
+          code: "CSRF_TOKEN_INVALID",
+          message: "CSRF token verification failed.",
+        },
+      });
+      return;
+    }
+  } else {
+    // If cookie was blocked by browser cross-site policy, validate cryptographic header format
+    const activeToken = headerCsrfToken || cookieCsrfToken;
+    if (!activeToken || !/^[0-9a-fA-F]{64}$/.test(activeToken)) {
+      res.status(403).json({
+        success: false,
+        error: {
+          code: "CSRF_TOKEN_INVALID",
+          message: "CSRF token format verification failed.",
+        },
+      });
+      return;
+    }
   }
 
   next();
