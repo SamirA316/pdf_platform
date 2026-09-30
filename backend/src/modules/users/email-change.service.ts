@@ -3,6 +3,7 @@ import { prisma } from "../../common/prisma";
 import { envConfig } from "../../common/config";
 import { logger } from "../../common/logger";
 import { authService } from "../auth/auth.service";
+import { generateOtpEmailHtml } from "../auth/email-templates";
 import { BadRequestError, NotFoundError } from "../../common/errors/AppError";
 import { IPublicUser, toPublicUser } from "./user.types";
 import { securityEventService } from "./security-event.service";
@@ -120,18 +121,12 @@ export class EmailChangeService {
     await authService.sendEmail(
       normalizedEmail,
       "Verify Your New Email Address - QuickPDF Platform",
-      `
-      <div style="font-family: sans-serif; padding: 20px; line-height: 1.5;">
-        <h2>Email Change Verification</h2>
-        <p>You requested to update your QuickPDF Platform account email to <strong>${normalizedEmail}</strong>.</p>
-        <p>Your 6-digit verification code is:</p>
-        <div style="font-size: 28px; font-weight: bold; letter-spacing: 4px; color: #2563eb; margin: 16px 0;">
-          ${rawOtp}
-        </div>
-        <p>This verification code expires in 10 minutes.</p>
-        <p>If you did not initiate this request, please change your password immediately.</p>
-      </div>
-      `,
+      generateOtpEmailHtml({
+        title: "Verify New Email Address",
+        subtitle: `You requested to update your QuickPDF Platform account email to <strong>${normalizedEmail}</strong>. Enter the verification code below to confirm this change.`,
+        code: rawOtp,
+        expireMinutes: 10,
+      }),
       `Your QuickPDF Platform email change verification code is: ${rawOtp}. Valid for 10 minutes.`
     );
 

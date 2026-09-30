@@ -13,6 +13,7 @@ import {
 } from "../../common/errors/AppError";
 import { sessionService } from "./session.service";
 import { securityEventService } from "../users/security-event.service";
+import { generateOtpEmailHtml } from "./email-templates";
 import {
   IUserDto,
   IAuthResult,
@@ -195,8 +196,13 @@ export class AuthService {
       await this.sendEmail(
         input.email,
         "Verify your QuickPDF Account",
-        `<p>Your 6-digit verification code is: <strong>${rawOtp}</strong>. It expires in 10 minutes.</p>`,
-        `Your 6-digit verification code is: ${rawOtp}. It expires in 10 minutes.`
+        generateOtpEmailHtml({
+          title: "Verify Your Email Address",
+          subtitle: "Thank you for creating an account with QuickPDF. Use the 6-digit code below to complete your registration.",
+          code: rawOtp,
+          expireMinutes: 10,
+        }),
+        `Your QuickPDF verification code is: ${rawOtp}. It expires in 10 minutes.`
       );
     } catch (emailErr) {
       // Transactional cleanup if email dispatch fails
@@ -347,8 +353,13 @@ export class AuthService {
       await this.sendEmail(
         input.email,
         "New Verification Code - QuickPDF",
-        `<p>Your new verification code is: <strong>${rawOtp}</strong>. It expires in 10 minutes.</p>`,
-        `Your new verification code is: ${rawOtp}. It expires in 10 minutes.`
+        generateOtpEmailHtml({
+          title: "Your New Verification Code",
+          subtitle: "You requested a new verification code for your QuickPDF account. Enter this code to verify your account.",
+          code: rawOtp,
+          expireMinutes: 10,
+        }),
+        `Your new QuickPDF verification code is: ${rawOtp}. It expires in 10 minutes.`
       );
     } catch (emailErr) {
       // Revert otpLastSentAt if email dispatch fails so user isn't locked out by cooldown
@@ -453,8 +464,13 @@ export class AuthService {
       await this.sendEmail(
         input.email,
         "Password Reset Request - QuickPDF",
-        `<p>You requested to reset your password. Your reset code is: <strong>${rawResetCode}</strong>. It expires in 15 minutes.</p>`,
-        `Your password reset code is: ${rawResetCode}. It expires in 15 minutes.`
+        generateOtpEmailHtml({
+          title: "Reset Your Password",
+          subtitle: "We received a request to reset your QuickPDF account password. Use the verification code below to proceed.",
+          code: rawResetCode,
+          expireMinutes: 15,
+        }),
+        `Your QuickPDF password reset code is: ${rawResetCode}. It expires in 15 minutes.`
       );
     } catch (emailErr) {
       await prisma.user.update({
