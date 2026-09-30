@@ -26,7 +26,7 @@ import { loginBruteForceTracker } from "../../middlewares/rateLimiter.middleware
 const COOKIE_OPTIONS = {
   httpOnly: true,
   secure: envConfig.NODE_ENV === "production",
-  sameSite: "lax" as const,
+  sameSite: (envConfig.NODE_ENV === "production" ? "none" : "lax") as "none" | "lax",
   path: "/",
   maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
 };
@@ -146,7 +146,7 @@ export class AuthController {
       const clearOptions = {
         httpOnly: true,
         secure: envConfig.NODE_ENV === "production",
-        sameSite: "lax" as const,
+        sameSite: (envConfig.NODE_ENV === "production" ? "none" : "lax") as "none" | "lax",
         path: "/",
       };
 
@@ -270,7 +270,7 @@ export class AuthController {
         const clearOptions = {
           httpOnly: true,
           secure: envConfig.NODE_ENV === "production",
-          sameSite: "lax" as const,
+          sameSite: (envConfig.NODE_ENV === "production" ? "none" : "lax") as "none" | "lax",
           path: "/",
         };
         res.clearCookie(SESSION_COOKIE_NAME, clearOptions);

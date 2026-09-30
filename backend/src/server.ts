@@ -41,7 +41,25 @@ app.use(
 
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL || "http://localhost:3000",
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      const allowedOrigins = [
+        process.env.FRONTEND_URL,
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+      ].filter(Boolean) as string[];
+      if (allowedOrigins.includes(origin)) return callback(null, true);
+      try {
+        const url = new URL(origin);
+        if (
+          url.hostname.endsWith(".vercel.app") &&
+          (url.hostname.includes("pdfplatform") || url.hostname.includes("pdf_platform"))
+        ) {
+          return callback(null, true);
+        }
+      } catch {}
+      return callback(null, false);
+    },
     credentials: true,
   })
 );

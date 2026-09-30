@@ -7,8 +7,7 @@ import { sessionService } from "../modules/auth/session.service";
 import { logger } from "../common/logger";
 
 export const GUEST_USER_ID = "guest-user-account";
-export const SESSION_COOKIE_NAME =
-  envConfig.NODE_ENV === "production" ? "__Host-pdf_session" : "pdf_session";
+export const SESSION_COOKIE_NAME = "pdf_session";
 
 let guestUserEnsured = false;
 async function ensureGuestUser() {
