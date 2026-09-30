@@ -11,6 +11,10 @@ import {
   ZoomOut,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
+  ChevronDown,
+  ArrowRight,
+  SlidersHorizontal,
   Download,
   MousePointer,
   Highlighter,
@@ -26,6 +30,7 @@ import {
   AlignLeft,
   AlignCenter,
   AlignRight,
+  AlignJustify,
   Square,
   Circle,
   Minus,
@@ -36,7 +41,12 @@ import {
   PanelLeftOpen,
   Layers,
   RefreshCw,
-  Plus
+  Plus,
+  List,
+  Bookmark,
+  MoreHorizontal,
+  ArrowLeftRight,
+  Settings
 } from "lucide-react";
 import { PDFDocument, rgb, StandardFonts, degrees } from "pdf-lib";
 import { apiClient } from "@/lib/apiClient";
@@ -56,6 +66,20 @@ export interface RawBox {
   origHeight: number;
 }
 
+export interface ParagraphLine {
+  text: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  vy: number;
+  origPdfX?: number;
+  origPdfY?: number;
+  origWidth?: number;
+  origHeight?: number;
+  rawBoxes?: RawBox[];
+}
+
 export interface EditableText {
   id: string;
   page: number;
@@ -67,19 +91,25 @@ export interface EditableText {
   height: number;
   fontSize: number;
   fontFamily: "Helvetica" | "TimesRoman" | "Courier";
+  fontNameRaw?: string;
   isBold: boolean;
   isItalic: boolean;
   color: string;
   bgColor: string; // sampled background color
   bgRgb: [number, number, number];
-  align: "left" | "center" | "right";
+  align: "left" | "center" | "right" | "justify";
+  lineHeight?: number;
   isOriginal: boolean;
   whiteoutOriginal: boolean;
+  origX?: number;
+  origY?: number;
   origPdfX?: number;
   origPdfY?: number;
   origWidth?: number;
   origHeight?: number;
   rawBoxes?: RawBox[];
+  lines?: ParagraphLine[];
+  originalLineCount?: number;
   isScrambled?: boolean;
 }
 
@@ -531,6 +561,126 @@ function sampleCanvasTextColor(
   return `#${toHex(avgR)}${toHex(avgG)}${toHex(avgB)}`;
 }
 
+// Intelligent Multi-line Text Wrapping with exact font width measurement
+export function wrapTextIntoLines(
+  text: string,
+  font: any,
+  fontSize: number,
+  maxWidth: number
+): string[] {
+  if (!text) return [];
+  const paragraphs = text.split("\n");
+  const result: string[] = [];
+
+  for (const para of paragraphs) {
+    if (para.trim() === "") {
+      result.push("");
+      continue;
+    }
+    const words = para.split(/\s+/).filter(Boolean);
+    let curLine = "";
+
+    for (const w of words) {
+      const test = curLine ? `${curLine} ${w}` : w;
+      let wPx = 0;
+      if (font && typeof font.widthOfTextAtSize === "function") {
+        try {
+          wPx = font.widthOfTextAtSize(test, fontSize);
+        } catch {
+          wPx = test.length * fontSize * 0.52;
+        }
+      } else {
+        wPx = test.length * fontSize * 0.52;
+      }
+
+      if (wPx <= maxWidth || !curLine) {
+        curLine = test;
+      } else {
+        result.push(curLine);
+        curLine = w;
+      }
+    }
+    if (curLine) {
+      result.push(curLine);
+    }
+  }
+
+  return result.length > 0 ? result : [text];
+}
+
+// Estimate line count for paragraph container sizing and reflow
+export function estimateParagraphLineCount(
+  text: string,
+  width: number,
+  fontSize: number
+): number {
+  if (!text) return 1;
+  const paragraphs = text.split("\n");
+  let totalLines = 0;
+  const approxCharW = fontSize * 0.50;
+  const charsPerLine = Math.max(8, Math.floor(width / approxCharW));
+
+  for (const p of paragraphs) {
+    if (!p) {
+      totalLines += 1;
+      continue;
+    }
+    const words = p.split(/\s+/).filter(Boolean);
+    let curChars = 0;
+    let pLines = 1;
+    for (const w of words) {
+      const wLen = w.length + 1;
+      if (curChars + wLen <= charsPerLine || curChars === 0) {
+        curChars += wLen;
+      } else {
+        pLines += 1;
+        curChars = wLen;
+      }
+    }
+    totalLines += pLines;
+  }
+  return Math.max(1, totalLines);
+}
+
+export function calculateExtraLines(item: EditableText): number {
+  if (!item.currentText || !item.originalText) return 0;
+  
+  const origLines = item.originalLineCount || (item.lines ? item.lines.length : 1);
+  const explicitCurrLines = item.currentText.split("\n").length;
+  const explicitOrigLines = item.originalText.split("\n").length;
+  const explicitExtra = Math.max(0, explicitCurrLines - explicitOrigLines);
+  
+  // Calculate character length difference
+  const origLen = Math.max(item.originalText.length, 1);
+  const currLen = item.currentText.length;
+  const charDiff = currLen - origLen;
+  
+  // Average characters per line in this paragraph
+  const charsPerLine = Math.max(15, Math.round(origLen / origLines));
+  
+  // Check width resize factor
+  const widthRatio = (item.origWidth && item.origWidth > 20) ? (item.origWidth / item.width) : 1;
+  
+  let wrappedExtra = 0;
+  if (widthRatio > 1.15) {
+    // Box was resized to be noticeably narrower
+    const newCapacityPerLine = Math.max(10, Math.floor(charsPerLine / widthRatio));
+    const newTotalLines = Math.ceil(currLen / newCapacityPerLine);
+    wrappedExtra = Math.max(0, newTotalLines - origLines);
+  } else if (charDiff > charsPerLine * 0.75) {
+    // User actually typed enough characters to warrant a new line
+    wrappedExtra = Math.floor(charDiff / (charsPerLine * 0.85));
+  }
+  
+  return Math.max(explicitExtra, wrappedExtra);
+}
+
+// In PDF editing, unedited canvas text should remain fixed in its original coordinates
+// to prevent overlapping headings or duplicating text across the page.
+export function calculatePageYShifts(_pageTexts?: EditableText[]): Map<string, number> {
+  return new Map<string, number>();
+}
+
 // =========================================================================
 // ROBUST DOCUMENT TEXT EXTRACTION & ADAPTIVE LINE/SEGMENT CLUSTERING
 // =========================================================================
@@ -567,9 +717,15 @@ export function extractAndClusterPageText(
     if (!item.str || item.str.length === 0) continue;
 
     const [vx, vy] = viewport.convertToViewportPoint(item.transform[4], item.transform[5]);
-    const exactPt = (item.height && item.height > 0)
-      ? item.height
-      : (Math.hypot(item.transform[2], item.transform[3]) || Math.abs(item.transform[3]) || Math.hypot(item.transform[0], item.transform[1]) || 12);
+    
+    // In PDF specification, font size is defined by the transformation matrix:
+    // Math.hypot(transform[2], transform[3]) is the true font size (vertical scale).
+    // item.height in PDF.js is only glyph bounding box (~70% of font size), so prioritize transform!
+    const transformFontSize = Math.max(
+      Math.hypot(item.transform[2], item.transform[3]),
+      Math.hypot(item.transform[0], item.transform[1])
+    );
+    const exactPt = transformFontSize > 0 ? transformFontSize : (item.height && item.height > 0 ? item.height : 12);
     const fontHeightPt = exactPt;
     const fontWidthPt = Math.hypot(item.transform[0], item.transform[1]) || exactPt;
 
@@ -608,11 +764,16 @@ export function extractAndClusterPageText(
     isScrambledText(item.str) || /[\u0001-\u0008\u000B\u000C\u000E-\u001F]/.test(item.str)
   );
 
+  const pageHasSerif = rawList.some(item =>
+    /times|roman|georgia|cambria|garamond|palatino|baskerville|minion|nimbusrom|ptmr|cmr|\bserif\b/i.test(item.fontNameCombined) &&
+    !/sans[\s-]*serif/i.test(item.fontNameCombined)
+  );
+
   // 2. Sort items: Line-by-line using text BASELINE (vy) threshold, then left-to-right (vx)
   // This completely eliminates cross-column / mismatched font-size line scramble!
   rawList.sort((a, b) => {
     const baselineDiff = a.vy - b.vy;
-    const lineThreshold = Math.min(a.fontSizePt, b.fontSizePt) * zoom * 0.45;
+    const lineThreshold = Math.min(a.fontSizePt, b.fontSizePt) * zoom * 0.70;
     if (Math.abs(baselineDiff) > lineThreshold) {
       return baselineDiff;
     }
@@ -644,18 +805,18 @@ export function extractAndClusterPageText(
   for (const item of rawList) {
     if (current) {
       const baselineDiff = Math.abs(item.vy - current.lastVy);
-      const isSameLine = baselineDiff <= Math.max(current.fontSize * zoom * 0.45, 5);
-      const prevRight = current.lastVx + current.lastWidth;
+      const isSameLine = baselineDiff <= Math.max(current.fontSize * zoom * 0.70, 7);
+      const prevRight = Math.max(current.maxX, current.lastVx + current.lastWidth);
       const gap = item.vx - prevRight;
 
-      // Allow negative kerning (down to -35% font size) and standard word spacing (up to 1.6x font size or 22px)
-      const minGap = -(current.fontSize * zoom * 0.35);
-      const maxGap = Math.min(Math.max(current.fontSize * zoom * 1.6, 12), 22);
+      // Allow negative kerning (down to -40% font size) and generous word spacing for justified text (up to 5x font size or 80px)
+      const minGap = -(current.fontSize * zoom * 0.40);
+      const maxGap = Math.max(current.fontSize * zoom * 5.0, 80);
       const isAdjacent = gap >= minGap && gap <= maxGap;
 
       if (isSameLine && isAdjacent) {
         const lastStr = current.strParts[current.strParts.length - 1] || "";
-        const needsSpace = gap > Math.max(current.fontSize * zoom * 0.15, 2.0) &&
+        const needsSpace = gap > Math.max(current.fontSize * zoom * 0.12, 1.5) &&
           !lastStr.endsWith(" ") &&
           !item.str.startsWith(" ");
 
@@ -668,6 +829,7 @@ export function extractAndClusterPageText(
         current.minY = Math.min(current.minY, item.topY);
         current.maxX = Math.max(current.maxX, item.vx + item.width);
         current.maxY = Math.max(current.maxY, item.topY + item.height);
+        current.fontSize = Math.max(current.fontSize, item.fontSizePt);
 
         current.lastVx = item.vx;
         current.lastWidth = item.width;
@@ -683,11 +845,6 @@ export function extractAndClusterPageText(
           origWidth: item.origWidth,
           origHeight: item.origHeight,
         });
-
-        if (item.hasEOL) {
-          clusters.push(current);
-          current = null;
-        }
 
         continue;
       } else {
@@ -722,11 +879,6 @@ export function extractAndClusterPageText(
       origWidth: item.origWidth,
       origHeight: item.origHeight,
     };
-
-    if (item.hasEOL) {
-      clusters.push(current);
-      current = null;
-    }
   }
 
   if (current) {
@@ -736,11 +888,36 @@ export function extractAndClusterPageText(
   // Filter out any purely empty whitespace clusters
   const validClusters = clusters.filter(c => c.strParts.join("").trim().length > 0);
 
-  // 4. Generate clean, high-fidelity EditableText objects
-  return validClusters.map((grp, idx) => {
+  // 4. Convert single-line clusters into high-fidelity ExtractedLine objects
+  interface ExtractedLine {
+    text: string;
+    minX: number;
+    minY: number;
+    maxX: number;
+    maxY: number;
+    width: number;
+    height: number;
+    vy: number;
+    fontSize: number;
+    fontFamily: "Helvetica" | "TimesRoman" | "Courier";
+    fontNameRaw: string;
+    isBold: boolean;
+    isItalic: boolean;
+    color: string;
+    bgColor: string;
+    bgRgb: [number, number, number];
+    rawBoxes: RawBox[];
+    origPdfX: number;
+    origPdfY: number;
+    origWidth: number;
+    origHeight: number;
+    isScrambled: boolean;
+  }
+
+  const extractedLines: ExtractedLine[] = validClusters.map((grp) => {
     const combinedText = grp.strParts.join("");
     const w = Math.max(grp.maxX - grp.minX, 20);
-    const h = Math.max(grp.maxY - grp.minY, 13);
+    const h = Math.max(grp.maxY - grp.minY, grp.fontSize * 1.05);
 
     const isFontBold = grp.fontNameCombined.includes("bold") ||
       grp.fontNameCombined.includes("black") ||
@@ -750,11 +927,19 @@ export function extractAndClusterPageText(
     const isFontItalic = grp.fontNameCombined.includes("italic") || grp.fontNameCombined.includes("oblique");
     const fontLower = grp.fontNameCombined.toLowerCase();
     const isFontMono = /courier|mono|consolas|menlo|monaco/i.test(fontLower);
-    const isFontSans = /sans|arial|helvetica|roboto|calibri|open\s*sans|segoe|verdana|tahoma|system/i.test(fontLower);
-    // Explicitly exclude sans-serif from serif match so "sans-serif" never matches "serif"
-    const isFontSerif = !isFontSans && (/times|roman|georgia|cambria|garamond|palatino|baskerville/i.test(fontLower) || /\bserif\b/i.test(fontLower));
+    const isFontSerif = !isFontMono && (
+      /times|roman|georgia|cambria|garamond|palatino|baskerville|minion|nimbusrom|ptmr|cmr/i.test(fontLower) ||
+      (/\bserif\b/i.test(fontLower) && !/sans[\s-]*serif/i.test(fontLower))
+    );
+    const isFontSans = !isFontMono && !isFontSerif && (
+      /sans|arial|helvetica|roboto|calibri|open\s*sans|segoe|verdana|tahoma|system/i.test(fontLower)
+    );
 
-    const detectedFont: "Helvetica" | "TimesRoman" | "Courier" = isFontMono ? "Courier" : isFontSerif ? "TimesRoman" : "Helvetica";
+    const detectedFont: "Helvetica" | "TimesRoman" | "Courier" = isFontMono
+      ? "Courier"
+      : (isFontSerif || (!isFontSans && pageHasSerif))
+      ? "TimesRoman"
+      : "Helvetica";
 
     let bgHex = "#ffffff";
     let bgRgbVal: [number, number, number] = [255, 255, 255];
@@ -767,7 +952,6 @@ export function extractAndClusterPageText(
         bgRgbVal = [bgSample.r, bgSample.g, bgSample.b];
         detectedColor = sampleCanvasTextColor(ctx, grp.minX * dprScale, grp.minY * dprScale, w * dprScale, h * dprScale, bgSample.r, bgSample.g, bgSample.b);
 
-        // Contrast & sanity safeguard
         const bgLum = 0.299 * bgSample.r + 0.587 * bgSample.g + 0.114 * bgSample.b;
         const [tr, tg, tb] = parseColorToRgb(detectedColor);
         const trByte = Math.round(tr * 255);
@@ -778,15 +962,9 @@ export function extractAndClusterPageText(
         const isNeutral = colorDiff < 40 || (maxByte > 0 && colorDiff / maxByte < 0.22);
 
         if (bgLum >= 130) {
-          // Light background: Neutral text must always be pure black #000000
-          if (isNeutral) {
-            detectedColor = "#000000";
-          }
+          if (isNeutral) detectedColor = "#000000";
         } else if (bgLum < 130) {
-          // Dark background: Neutral text must always be pure white #ffffff
-          if (isNeutral) {
-            detectedColor = "#ffffff";
-          }
+          if (isNeutral) detectedColor = "#ffffff";
         }
       } catch {}
     }
@@ -794,30 +972,284 @@ export function extractAndClusterPageText(
     const isScrambled = pageHasCorruptedFonts || isScrambledText(combinedText);
 
     return {
-      id: `p${pageNum}-txt-${idx}`,
-      page: pageNum,
-      originalText: combinedText,
-      currentText: combinedText,
-      x: grp.minX,
-      y: grp.minY,
+      text: combinedText,
+      minX: grp.minX,
+      minY: grp.minY,
+      maxX: grp.maxX,
+      maxY: grp.maxY,
       width: w,
       height: h,
+      vy: grp.lastVy,
       fontSize: grp.fontSize,
       fontFamily: detectedFont,
+      fontNameRaw: grp.fontNameCombined,
       isBold: isFontBold,
       isItalic: isFontItalic,
       color: detectedColor,
       bgColor: bgHex,
       bgRgb: bgRgbVal,
-      align: "left",
-      isOriginal: true,
-      whiteoutOriginal: false,
+      rawBoxes: grp.rawBoxes,
       origPdfX: grp.origPdfX,
       origPdfY: grp.origPdfY,
       origWidth: grp.rawBoxes.reduce((acc, b) => acc + b.origWidth, 0),
       origHeight: grp.origHeight,
-      rawBoxes: grp.rawBoxes,
       isScrambled,
+    };
+  });
+
+  // Sort extracted lines vertically (top to bottom), then left to right
+  extractedLines.sort((a, b) => {
+    const diffY = a.minY - b.minY;
+    if (Math.abs(diffY) > 5) return diffY;
+    return a.minX - b.minX;
+  });
+
+  // 5. Cluster lines into coherent Paragraph Blocks while strictly protecting headings, titles, and labels
+  interface ParagraphCluster {
+    lines: ExtractedLine[];
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    fontSize: number;
+    fontFamily: "Helvetica" | "TimesRoman" | "Courier";
+    fontNameRaw: string;
+    isBold: boolean;
+    isItalic: boolean;
+    color: string;
+    bgColor: string;
+    bgRgb: [number, number, number];
+    align: "left" | "center" | "right" | "justify";
+    lineHeight: number;
+    isScrambled: boolean;
+  }
+
+  // Pre-calculate page-wide column right edges
+  const colRightEdges = extractedLines.map(line => {
+    const colLines = extractedLines.filter(l => Math.abs(l.minX - line.minX) <= 25);
+    return colLines.length > 0 ? Math.max(...colLines.map(l => l.maxX)) : line.maxX;
+  });
+
+  const paragraphClusters: ParagraphCluster[] = [];
+  let curPara: ParagraphCluster | null = null;
+
+  for (let li = 0; li < extractedLines.length; li++) {
+    const line = extractedLines[li];
+    const colRight = colRightEdges[li];
+    const lineTrimmed = line.text.trim();
+    const nextLine = extractedLines[li + 1];
+
+    // Standalone headings (e.g. "ABSTRACT", "INTRODUCTION", "REFERENCES")
+    // These should stay as their own 1-line block and not merge with body paragraphs.
+    const isAllCapsTitle = /^[A-Z0-9\s:_-]{3,35}$/.test(lineTrimmed) &&
+      lineTrimmed === lineTrimmed.toUpperCase() &&
+      !/[.,;]/.test(lineTrimmed) &&
+      (/[A-Z]/.test(lineTrimmed));
+
+    const isNumberedHeading = /^[0-9]+(\.[0-9]+)*\s+[A-Z][A-Za-z0-9\s_-]{2,35}$/.test(lineTrimmed) &&
+      !/[.,;]$/.test(lineTrimmed);
+
+    const isBoldTitle = line.isBold && nextLine && !nextLine.isBold &&
+      lineTrimmed.length < 40 &&
+      !/[.,;]$/.test(lineTrimmed);
+
+    const isStandaloneHeading = isAllCapsTitle || isNumberedHeading || isBoldTitle;
+
+    // Does this line start a distinct document section / label (like "Keywords:", "Figure 1:", "Table 1:")?
+    // If so, it must start a new paragraph block rather than merging into the preceding text.
+    const startsNewSectionLabel = /^([0-9]+(\.[0-9]+)*\s+[A-Z]|Keywords:|Index Terms:|Abstract:|References:|Note:|Figure\s+[0-9]+:|Table\s+[0-9]+:)/i.test(lineTrimmed);
+
+    if (curPara) {
+      const lastLine = curPara.lines[curPara.lines.length - 1];
+      const baselineDiff = line.vy - lastLine.vy;
+
+      // Same font styling and size
+      const sameFont = line.fontFamily === curPara.fontFamily &&
+                       line.isBold === curPara.isBold &&
+                       line.isItalic === curPara.isItalic;
+      const sameSize = Math.abs(line.fontSize - curPara.fontSize) <= 1.2;
+
+      // Normal paragraph line spacing (between 0.80x and 1.80x of font size)
+      const isNormalLineSpacing = baselineDiff >= curPara.fontSize * 0.80 && baselineDiff <= curPara.fontSize * 1.80;
+
+      // Same column alignment (allowing indentation) OR horizontally centered lines (e.g. multi-line centered titles)
+      const sameColumn = Math.abs(line.minX - curPara.x) <= Math.max(curPara.fontSize * 2.5, 30);
+      const lastLineMid = (lastLine.minX + lastLine.maxX) / 2;
+      const lineMid = (line.minX + line.maxX) / 2;
+      const isCenteredTogether = Math.abs(lastLineMid - lineMid) <= Math.max(curPara.fontSize * 2.5, 45);
+      const isSameAlignment = sameColumn || isCenteredTogether;
+
+      // Paragraph termination detection: last line ended with punctuation and ended well before the column right margin
+      const lastLineEndsPara = /[.!?]\s*$/.test(lastLine.text.trim()) &&
+                               (colRight - lastLine.maxX > Math.max(curPara.fontSize * 3.5, 45));
+
+      // curPara itself was a standalone heading or title
+      const curParaIsHeading = curPara.lines.length === 1 && (
+        (/^[A-Z0-9\s:_-]{3,35}$/.test(curPara.lines[0].text.trim()) &&
+         curPara.lines[0].text.trim() === curPara.lines[0].text.trim().toUpperCase() &&
+         !/[.,;]/.test(curPara.lines[0].text.trim())) ||
+        (curPara.lines[0].isBold && !line.isBold && curPara.lines[0].text.trim().length < 40)
+      );
+
+      // If curPara has bold/large text and this line also has the SAME bold/large text, they belong together in the title
+      const isTitleContinuation = curPara.isBold && line.isBold && sameSize && isSameAlignment;
+      const shouldBlockMerge = !isTitleContinuation && (isStandaloneHeading || curParaIsHeading);
+
+      if (
+        sameFont &&
+        sameSize &&
+        isNormalLineSpacing &&
+        isSameAlignment &&
+        !lastLineEndsPara &&
+        !shouldBlockMerge &&
+        !startsNewSectionLabel
+      ) {
+        curPara.lines.push(line);
+        curPara.x = Math.min(curPara.x, line.minX);
+        const newMaxX = Math.max(curPara.x + curPara.width, line.maxX);
+        curPara.width = newMaxX - curPara.x;
+        curPara.height = (line.maxY - curPara.y);
+        curPara.lineHeight = (line.vy - curPara.lines[0].vy) / (curPara.lines.length - 1);
+        if (line.isScrambled) curPara.isScrambled = true;
+        continue;
+      } else {
+        paragraphClusters.push(curPara);
+        curPara = null;
+      }
+    }
+
+    curPara = {
+      lines: [line],
+      x: line.minX,
+      y: line.minY,
+      width: line.width,
+      height: line.height,
+      fontSize: line.fontSize,
+      fontFamily: line.fontFamily,
+      fontNameRaw: line.fontNameRaw,
+      isBold: line.isBold,
+      isItalic: line.isItalic,
+      color: line.color,
+      bgColor: line.bgColor,
+      bgRgb: line.bgRgb,
+      align: "left",
+      lineHeight: line.fontSize * 1.25,
+      isScrambled: line.isScrambled,
+    };
+  }
+
+  if (curPara) {
+    paragraphClusters.push(curPara);
+  }
+
+  // 6. Detect Justification / Text Alignment & finalize column widths for multi-line paragraphs
+  for (const para of paragraphClusters) {
+    if (para.lines.length >= 2) {
+      const minX = Math.min(...para.lines.map(l => l.minX));
+      const maxX = Math.max(...para.lines.map(l => l.maxX));
+      para.x = minX;
+      para.width = Math.max(maxX - minX + 6, 30);
+      para.height = Math.max(para.height, para.lines.length * para.lineHeight + (para.fontSize * 0.45));
+
+      const nonTerminalLines = para.lines.slice(0, para.lines.length - 1);
+      const rightEdges = nonTerminalLines.map(l => l.maxX);
+      const rightEdgeSpread = rightEdges.length > 0 ? (Math.max(...rightEdges) - Math.min(...rightEdges)) : 0;
+      const allNonTerminalNearMargin = nonTerminalLines.length > 0 && nonTerminalLines.every(l => (maxX - l.maxX) <= 24);
+
+      // In justified text, non-terminal lines are flush to the right margin
+      if (rightEdgeSpread <= 22 || allNonTerminalNearMargin) {
+        para.align = "justify";
+      } else {
+        const centers = para.lines.map(l => (l.minX + l.maxX) / 2);
+        const centerSpread = Math.max(...centers) - Math.min(...centers);
+        if (centerSpread <= 8) {
+          para.align = "center";
+        } else {
+          const allRights = para.lines.map(l => l.maxX);
+          if (Math.max(...allRights) - Math.min(...allRights) <= 8) {
+            para.align = "right";
+          } else {
+            para.align = "left";
+          }
+        }
+      }
+    } else {
+      const line = para.lines[0];
+      const pageMid = viewport.width / 2;
+      const lineMid = (line.minX + line.maxX) / 2;
+      if (Math.abs(lineMid - pageMid) < 15 && line.width < viewport.width * 0.7) {
+        para.align = "center";
+      } else {
+        para.align = "left";
+      }
+    }
+  }
+
+  // 7. Generate clean, high-fidelity EditableText objects
+  return paragraphClusters.map((para, idx) => {
+    let fullText = "";
+    for (let li = 0; li < para.lines.length; li++) {
+      const lText = para.lines[li].text.trim();
+      if (li === 0) {
+        fullText = lText;
+      } else {
+        if (fullText.endsWith("-") && /^[a-zA-Z]/.test(lText)) {
+          fullText = fullText.slice(0, -1) + lText;
+        } else {
+          fullText += " " + lText;
+        }
+      }
+    }
+
+    const words = fullText.split(/\s+/);
+    const maxWordLen = words.reduce((max, w) => Math.max(max, w.length), 0);
+    const minWordWidth = Math.max(maxWordLen * para.fontSize * 0.65, 30);
+    const finalWidth = Math.max(para.width + 4, minWordWidth);
+    const finalHeight = Math.max(para.height, para.fontSize * 1.05);
+
+    return {
+      id: `p${pageNum}-txt-${idx}`,
+      page: pageNum,
+      originalText: fullText,
+      currentText: fullText,
+      x: para.x,
+      y: para.y,
+      origX: para.x,
+      origY: para.y,
+      width: finalWidth,
+      height: finalHeight,
+      fontSize: para.fontSize,
+      fontFamily: para.fontFamily,
+      fontNameRaw: para.fontNameRaw,
+      isBold: para.isBold,
+      isItalic: para.isItalic,
+      color: para.color,
+      bgColor: para.bgColor,
+      bgRgb: para.bgRgb,
+      align: para.align,
+      lineHeight: Math.max(para.lineHeight, para.fontSize * 1.15),
+      isOriginal: true,
+      whiteoutOriginal: false,
+      origPdfX: para.lines[0]?.origPdfX,
+      origPdfY: para.lines[0]?.origPdfY,
+      origWidth: finalWidth,
+      origHeight: finalHeight,
+      rawBoxes: para.lines.flatMap(l => l.rawBoxes || []),
+      lines: para.lines.map(l => ({
+        text: l.text,
+        x: l.minX,
+        y: l.minY,
+        width: l.width,
+        height: l.height,
+        vy: l.vy,
+        origPdfX: l.origPdfX,
+        origPdfY: l.origPdfY,
+        origWidth: l.origWidth,
+        origHeight: l.origHeight,
+        rawBoxes: l.rawBoxes,
+      })),
+      originalLineCount: para.lines.length,
+      isScrambled: para.isScrambled,
     };
   });
 }
@@ -832,8 +1264,16 @@ export function EditConfig({ files, onProcess, slug }: EditConfigProps) {
   const [pdfDoc, setPdfDoc] = useState<any>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [zoom, setZoom] = useState(1.25);
+  const [zoom, setZoom] = useState(1.0); // 100% default zoom for crisp, sharp 1:1 document rendering
+  const zoomRef = useRef(zoom);
+  useEffect(() => {
+    zoomRef.current = zoom;
+  }, [zoom]);
   const [pageRotations, setPageRotations] = useState<{ [page: number]: number }>({});
+  const [pageDimensions, setPageDimensions] = useState<{ [page: number]: { width: number; height: number } }>({});
+  const [sidebarTab, setSidebarTab] = useState<"thumbnails" | "outline" | "bookmarks" | "more">("thumbnails");
+  const pageCanvasRefs = useRef<{ [page: number]: HTMLCanvasElement | null }>({});
+  const drawCanvasRefs = useRef<{ [page: number]: HTMLCanvasElement | null }>({});
 
   // Active Tool
   type ToolType = "select" | "edit-text" | "add-text" | "whiteout" | "signature" | "shape" | "draw" | "highlight" | "image";
@@ -871,6 +1311,7 @@ export function EditConfig({ files, onProcess, slug }: EditConfigProps) {
   const [isScanning, setIsScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState<{ current: number; total: number; texts: number; images: number } | null>(null);
   const [showThumbnailsSidebar, setShowThumbnailsSidebar] = useState(true);
+  const [showInspectorSidebar, setShowInspectorSidebar] = useState(true);
 
   // History Stack for Undo / Redo
   const [undoStack, setUndoStack] = useState<HistorySnapshot[]>([]);
@@ -879,7 +1320,7 @@ export function EditConfig({ files, onProcess, slug }: EditConfigProps) {
   // Dragging & Resizing States
   const [draggingItemId, setDraggingItemId] = useState<{ type: "text" | "image" | "shape" | "whiteout" | "embedded-image"; id: string } | null>(null);
   const [dragOffset, setDragOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
-  const [resizingItemId, setResizingItemId] = useState<{ type: "image" | "shape" | "whiteout" | "embedded-image"; id: string } | null>(null);
+  const [resizingItemId, setResizingItemId] = useState<{ type: "text" | "image" | "shape" | "whiteout" | "embedded-image"; id: string } | null>(null);
   const [resizeInitial, setResizeInitial] = useState<{ startX: number; startY: number; initialW: number; initialH: number }>({ startX: 0, startY: 0, initialW: 0, initialH: 0 });
 
   // Freehand Drawing
@@ -931,6 +1372,7 @@ export function EditConfig({ files, onProcess, slug }: EditConfigProps) {
   const imageInputRef = useRef<HTMLInputElement>(null);
   const renderTaskRef = useRef<any>(null);
   const [canvasWidth, setCanvasWidth] = useState<number>(1000);
+  const [canvasHeight, setCanvasHeight] = useState<number>(1400);
 
   // Save snapshot to Undo Stack
   const takeSnapshot = useCallback(() => {
@@ -1032,11 +1474,26 @@ export function EditConfig({ files, onProcess, slug }: EditConfigProps) {
     const loadPdfFile = async () => {
       try {
         const arrayBuffer = await files[0].arrayBuffer();
-        const loadedPdf = await (window as any).pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        const loadedPdf = await (window as any).pdfjsLib.getDocument({
+          data: arrayBuffer,
+          cMapUrl: "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/",
+          cMapPacked: true,
+          standardFontDataUrl: "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/standard_fonts/",
+        }).promise;
         if (isCancelled) return;
         setPdfDoc(loadedPdf);
         setTotalPages(loadedPdf.numPages);
         setCurrentPage(1);
+
+        const baseDims: { [page: number]: { width: number; height: number } } = {};
+        for (let p = 1; p <= loadedPdf.numPages; p++) {
+          const pg = await loadedPdf.getPage(p);
+          const vp = pg.getViewport({ scale: 1.0 });
+          baseDims[p] = { width: Math.round(vp.width), height: Math.round(vp.height) };
+        }
+        if (!isCancelled) {
+          setPageDimensions(baseDims);
+        }
       } catch (err) {
         console.error("Failed to load PDF in editor:", err);
       }
@@ -1046,97 +1503,7 @@ export function EditConfig({ files, onProcess, slug }: EditConfigProps) {
     return () => { isCancelled = true; };
   }, [isPdfJsLoaded, files]);
 
-  // Background Multi-Page Deep Scanner & Thumbnail Generator
-  useEffect(() => {
-    if (!pdfDoc) return;
-    let isCancelled = false;
-
-    const scanAllPages = async () => {
-      setIsScanning(true);
-      let totalTexts = 0;
-      let totalImages = 0;
-      const total = pdfDoc.numPages;
-
-      // Give main canvas a small tick to start rendering first page without worker conflict
-      await new Promise(r => setTimeout(r, 120));
-      if (isCancelled) return;
-
-      for (let p = 1; p <= total; p++) {
-        if (isCancelled) break;
-        try {
-          setScanProgress({ current: p, total, texts: totalTexts, images: totalImages });
-          const pg = await pdfDoc.getPage(p);
-          if (isCancelled) break;
-
-          const rot = (pageRotations[p] || 0) % 360;
-          const fullViewport = pg.getViewport({ scale: zoom, rotation: rot });
-
-          // 1. Deep Extract & Cluster Text for this page
-          const txt = await pg.getTextContent();
-          const pageTexts = extractAndClusterPageText(txt, fullViewport, p, zoom, null);
-          totalTexts += pageTexts.length;
-
-          // Only populate textList for background pages.
-          // currentPage is rendered and extracted with high-fidelity live canvas sampling by renderAndExtract!
-          if (p !== currentPage) {
-            setTextList(prev => {
-              const hasExisting = prev.some(it => it.page === p && it.isOriginal);
-              if (hasExisting) return prev;
-              return [...prev, ...pageTexts];
-            });
-          }
-
-          // 2. Count Images
-          let imgCount = 0;
-          try {
-            const opList = await pg.getOperatorList();
-            const OPS = (window as any).pdfjsLib?.OPS;
-            if (OPS && opList?.fnArray) {
-              for (let i = 0; i < opList.fnArray.length; i++) {
-                const fn = opList.fnArray[i];
-                if (fn === OPS.paintImageXObject || fn === OPS.paintInlineImageXObject) {
-                  imgCount++;
-                }
-              }
-            }
-          } catch {}
-          totalImages += imgCount;
-
-          setPageStats(prev => ({ ...prev, [p]: { texts: pageTexts.length, images: imgCount } }));
-
-          // 3. Render visual thumbnail preview
-          const thumbViewport = pg.getViewport({ scale: 0.22, rotation: rot });
-          const tCanvas = document.createElement("canvas");
-          tCanvas.width = thumbViewport.width;
-          tCanvas.height = thumbViewport.height;
-          const tCtx = tCanvas.getContext("2d");
-          if (tCtx) {
-            try {
-              await pg.render({ canvasContext: tCtx, viewport: thumbViewport }).promise;
-              if (isCancelled) break;
-              const dataUrl = tCanvas.toDataURL("image/jpeg", 0.85);
-              setPageThumbnails(prev => ({ ...prev, [p]: dataUrl }));
-            } catch (thumbErr) {
-              console.warn("Thumbnail render warning:", thumbErr);
-            }
-          }
-        } catch (e) {
-          console.warn(`Scan error on page ${p}:`, e);
-        }
-      }
-
-      if (!isCancelled) {
-        setScanProgress({ current: total, total, texts: totalTexts, images: totalImages });
-        setIsScanning(false);
-        setTimeout(() => {
-          if (!isCancelled) setScanProgress(null);
-        }, 4000);
-      }
-    };
-
-    scanAllPages();
-    return () => { isCancelled = true; };
-  }, [pdfDoc, zoom, pageRotations]);
+  // Multi-page Continuous Rendering and Text Extraction is handled by renderAllPages below
 
   // Helper: Extract embedded images (photos, logos, signatures) from PDF page operator stream
   const extractEmbeddedImagesFromPage = async (
@@ -1241,162 +1608,190 @@ export function EditConfig({ files, onProcess, slug }: EditConfigProps) {
     }
   };
 
-  // Render Visual Page and Extract Text
+  // Scroll center desk smoothly to specific page
+  const scrollToPage = useCallback((pageNum: number) => {
+    setCurrentPage(pageNum);
+    const el = document.getElementById(`pdf-page-${pageNum}`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, []);
+
+  // Update active page based on continuous scroll probe
+  const handleDeskScroll = useCallback(() => {
+    if (!containerRef.current) return;
+    const deskRect = containerRef.current.getBoundingClientRect();
+    const probeY = deskRect.top + 160;
+
+    for (let p = 1; p <= totalPages; p++) {
+      const el = document.getElementById(`pdf-page-${p}`);
+      if (el) {
+        const rect = el.getBoundingClientRect();
+        if (rect.top <= probeY && rect.bottom >= probeY) {
+          if (currentPage !== p) {
+            setCurrentPage(p);
+          }
+          break;
+        }
+      }
+    }
+  }, [totalPages, currentPage]);
+
+  // Multi-Page Continuous Renderer & Deep Scanner (Runs on PDF load or page rotation)
   useEffect(() => {
-    if (!pdfDoc || !pdfCanvasRef.current) return;
+    if (!pdfDoc) return;
     let isCancelled = false;
 
-    const renderAndExtract = async () => {
-      try {
-        const page = await pdfDoc.getPage(currentPage);
-        if (isCancelled) return;
+    const renderAllPages = async () => {
+      setIsScanning(true);
+      const total = pdfDoc.numPages;
+      let totalTexts = 0;
+      let totalImages = 0;
 
-        const currentRotation = (pageRotations[currentPage] || 0) % 360;
-        const viewport = page.getViewport({ scale: zoom, rotation: currentRotation });
+      const dpr = typeof window !== "undefined" ? Math.max(window.devicePixelRatio || 1, 2) : 2;
 
-        const pdfCanvas = pdfCanvasRef.current;
-        const drawCanvas = drawCanvasRef.current;
-        if (!pdfCanvas || !drawCanvas) return;
-
-        // High-DPI / Retina rendering: render canvas at 2x+ physical pixels for razor-sharp, crystal clear clarity
-        const dpr = typeof window !== "undefined" ? Math.max(window.devicePixelRatio || 1, 2) : 2;
-        const renderViewport = page.getViewport({ scale: zoom * dpr, rotation: currentRotation });
-
-        pdfCanvas.width = Math.floor(renderViewport.width);
-        pdfCanvas.height = Math.floor(renderViewport.height);
-        pdfCanvas.style.width = `${Math.floor(viewport.width)}px`;
-        pdfCanvas.style.height = `${Math.floor(viewport.height)}px`;
-        setCanvasWidth(Math.floor(viewport.width));
-
-        drawCanvas.width = Math.floor(renderViewport.width);
-        drawCanvas.height = Math.floor(renderViewport.height);
-        drawCanvas.style.width = `${Math.floor(viewport.width)}px`;
-        drawCanvas.style.height = `${Math.floor(viewport.height)}px`;
-
-        const ctx = pdfCanvas.getContext("2d", { willReadFrequently: true });
-        if (!ctx) return;
-
-        if (renderTaskRef.current) {
-          try { renderTaskRef.current.cancel(); } catch {}
-        }
-
+      for (let p = 1; p <= total; p++) {
+        if (isCancelled) break;
         try {
-          const renderTask = page.render({
-            canvasContext: ctx,
-            viewport: renderViewport,
-            intent: "display",
-          });
-          renderTaskRef.current = renderTask;
-          await renderTask.promise;
-        } catch (rErr: any) {
-          if (rErr?.name !== "RenderingCancelledException") {
-            console.warn("Main canvas render warning:", rErr);
-          }
-        }
+          setScanProgress({ current: p, total, texts: totalTexts, images: totalImages });
+          const pg = await pdfDoc.getPage(p);
+          if (isCancelled) break;
 
-        if (isCancelled) return;
+          const rot = (pageRotations[p] || 0) % 360;
+          const baseViewport = pg.getViewport({ scale: 1.0, rotation: rot });
+          // Render internal canvas bitmap at ultra-crisp resolution (scale 3.0 / 2x DPR)
+          const renderScale = Math.max(2.5, dpr * 1.5);
+          const renderViewport = pg.getViewport({ scale: renderScale, rotation: rot });
 
-        // Restore freehand drawings for this page if any
-        const drawCtx = drawCanvas.getContext("2d");
-        const pageHistory = drawActions[currentPage];
-        if (drawCtx && pageHistory && pageHistory.length > 0) {
-          drawCtx.putImageData(pageHistory[pageHistory.length - 1], 0, 0);
-        }
+          const baseW = Math.round(baseViewport.width);
+          const baseH = Math.round(baseViewport.height);
 
-        // =========================================================================
-        // ACCURATE TEXT EXTRACTION & LIVE BACKGROUND COLOR SAMPLING
-        // =========================================================================
-        const textContent = await page.getTextContent();
-        if (isCancelled) return;
+          setPageDimensions(prev => ({
+            ...prev,
+            [p]: { width: baseW, height: baseH }
+          }));
 
-        const pageTexts = extractAndClusterPageText(textContent, viewport, currentPage, zoom, ctx);
-
-        setTextList(prev => {
-          const otherPages = prev.filter(item => item.page !== currentPage);
-          const existingCurrent = prev.filter(item => item.page === currentPage);
-
-          if (existingCurrent.length === 0) {
-            return [...otherPages, ...pageTexts];
-          }
-
-          // Merge fresh detected text with any existing user modifications
-          const merged = pageTexts.map(fresh => {
-            const userEdited = existingCurrent.find(
-              ex => ex.id === fresh.id || (
-                Math.abs(ex.x - fresh.x) < 8 && Math.abs(ex.y - fresh.y) < 8
-              )
-            );
-            if (userEdited && (userEdited.whiteoutOriginal || userEdited.currentText !== userEdited.originalText || !userEdited.isOriginal)) {
-              // Auto-heal stale black text or serif font if user started editing before live context sampled
-              const bgLum = fresh.bgRgb ? (0.299 * fresh.bgRgb[0] + 0.587 * fresh.bgRgb[1] + 0.114 * fresh.bgRgb[2]) : 255;
-              let correctedColor = userEdited.color;
-              if (bgLum < 128 && (correctedColor === "#000000" || correctedColor === "#374151")) {
-                correctedColor = fresh.color;
-              }
-              let correctedFont = userEdited.fontFamily;
-              if (userEdited.fontFamily === "TimesRoman" && fresh.fontFamily === "Helvetica") {
-                correctedFont = "Helvetica";
-              }
-              return {
-                ...userEdited,
-                bgColor: userEdited.bgColor === "#ffffff" ? fresh.bgColor : userEdited.bgColor,
-                bgRgb: userEdited.bgRgb && userEdited.bgRgb[0] === 255 && userEdited.bgRgb[1] === 255 ? fresh.bgRgb : userEdited.bgRgb,
-                color: correctedColor,
-                fontFamily: correctedFont,
-              };
+          // 1. Render Base Canvas for Page p
+          let canvas = pageCanvasRefs.current[p];
+          if (!canvas) {
+            for (let retry = 0; retry < 6 && !canvas && !isCancelled; retry++) {
+              await new Promise(r => setTimeout(r, 50));
+              canvas = pageCanvasRefs.current[p];
             }
-            return fresh;
-          });
-
-          // Include any newly user-added text
-          const userAddedTexts = existingCurrent.filter(item => !item.isOriginal);
-
-          return [...otherPages, ...merged, ...userAddedTexts];
-        });
-
-        // Extract embedded images from this page
-        const pageEmbedded = await extractEmbeddedImagesFromPage(page, viewport, pdfCanvas, currentPage);
-        if (pageEmbedded.length > 0) {
-          setEmbeddedImages(prev => {
-            const otherPages = prev.filter(img => img.page !== currentPage);
-            const currentExisting = prev.filter(img => img.page === currentPage);
-            if (currentExisting.length > 0) {
-              return [
-                ...otherPages,
-                ...currentExisting.map((ex, idx) => {
-                  const fresh = pageEmbedded[idx];
-                  return fresh
-                    ? { ...ex, x: fresh.x, y: fresh.y, width: fresh.width, height: fresh.height }
-                    : ex;
-                })
-              ];
+          }
+          let ctx: CanvasRenderingContext2D | null = null;
+          if (canvas) {
+            canvas.width = Math.floor(renderViewport.width);
+            canvas.height = Math.floor(renderViewport.height);
+            ctx = canvas.getContext("2d", { willReadFrequently: true });
+            if (ctx) {
+              try {
+                await pg.render({ canvasContext: ctx, viewport: renderViewport, intent: "display" }).promise;
+              } catch (rErr: any) {
+                if (rErr?.name !== "RenderingCancelledException") console.warn(`Page ${p} render warning:`, rErr);
+              }
             }
-            return [...otherPages, ...pageEmbedded];
+          }
+
+          // 2. Restore Drawing Canvas for Page p if any
+          const dCanvas = drawCanvasRefs.current[p];
+          if (dCanvas) {
+            dCanvas.width = Math.floor(renderViewport.width);
+            dCanvas.height = Math.floor(renderViewport.height);
+            const drawCtx = dCanvas.getContext("2d");
+            const pageHistory = drawActions[p];
+            if (drawCtx && pageHistory && pageHistory.length > 0) {
+              drawCtx.putImageData(pageHistory[pageHistory.length - 1], 0, 0);
+            }
+          }
+
+          // 3. Extract & Cluster Text for Page p at scale 1.0 (PDF points)
+          const textContent = await pg.getTextContent();
+          if (isCancelled) break;
+          const pageTexts = extractAndClusterPageText(textContent, baseViewport, p, 1.0, ctx);
+          totalTexts += pageTexts.length;
+
+          setTextList(prev => {
+            const otherPages = prev.filter(item => item.page !== p);
+            const existingPage = prev.filter(item => item.page === p);
+            if (existingPage.length === 0) {
+              return [...otherPages, ...pageTexts];
+            }
+            const merged = pageTexts.map(fresh => {
+              const userEdited = existingPage.find(ex => ex.id === fresh.id || (Math.abs(ex.x - fresh.x) < 8 && Math.abs(ex.y - fresh.y) < 8));
+              if (userEdited && (userEdited.whiteoutOriginal || userEdited.currentText !== userEdited.originalText || !userEdited.isOriginal)) {
+                return { ...userEdited, bgColor: fresh.bgColor, color: userEdited.color || fresh.color };
+              }
+              return fresh;
+            });
+            const userAdded = existingPage.filter(it => !it.isOriginal);
+            return [...otherPages, ...merged, ...userAdded];
           });
+
+          // 4. Generate Thumbnail for Page p
+          const thumbViewport = pg.getViewport({ scale: 0.22, rotation: rot });
+          const tCanvas = document.createElement("canvas");
+          tCanvas.width = thumbViewport.width;
+          tCanvas.height = thumbViewport.height;
+          const tCtx = tCanvas.getContext("2d");
+          if (tCtx) {
+            try {
+              await pg.render({ canvasContext: tCtx, viewport: thumbViewport }).promise;
+              if (isCancelled) break;
+              const dataUrl = tCanvas.toDataURL("image/jpeg", 0.85);
+              setPageThumbnails(prev => ({ ...prev, [p]: dataUrl }));
+            } catch {}
+          }
+
+          // 5. Embedded Images for Page p at scale 1.0 (PDF points)
+          if (canvas) {
+            const pageEmbedded = await extractEmbeddedImagesFromPage(pg, baseViewport, canvas, p);
+            if (pageEmbedded.length > 0) {
+              setEmbeddedImages(prev => {
+                const otherPages = prev.filter(img => img.page !== p);
+                const currentExisting = prev.filter(img => img.page === p);
+                if (currentExisting.length > 0) {
+                  return [
+                    ...otherPages,
+                    ...currentExisting.map((ex, idx) => {
+                      const fresh = pageEmbedded[idx];
+                      return fresh ? { ...ex, x: fresh.x, y: fresh.y, width: fresh.width, height: fresh.height } : ex;
+                    })
+                  ];
+                }
+                return [...otherPages, ...pageEmbedded];
+              });
+            }
+          }
+
+        } catch (e) {
+          console.warn(`Render error on page ${p}:`, e);
         }
-      } catch (err: any) {
-        if (err?.name !== "RenderingCancelledException") {
-          console.error("Render/Clustering error:", err);
-        }
+      }
+
+      if (!isCancelled) {
+        setIsScanning(false);
+        setTimeout(() => { if (!isCancelled) setScanProgress(null); }, 3000);
       }
     };
 
-    renderAndExtract();
-    return () => {
-      isCancelled = true;
-      if (renderTaskRef.current) {
-        try { renderTaskRef.current.cancel(); } catch {}
-      }
-    };
-  }, [pdfDoc, currentPage, zoom, pageRotations]);
+    renderAllPages();
+    return () => { isCancelled = true; };
+  }, [pdfDoc, pageRotations]);
 
   // Freehand Drawing Handlers
-  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = drawCanvasRef.current;
+  // Freehand Drawing Handlers
+  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>, pNum?: number) => {
+    const targetPage = pNum || currentPage;
+    const canvas = drawCanvasRefs.current[targetPage] || drawCanvasRef.current;
     if (!canvas) return;
+    if (currentPage !== targetPage) setCurrentPage(targetPage);
     const rect = canvas.getBoundingClientRect();
     const cssX = e.clientX - rect.left;
     const cssY = e.clientY - rect.top;
+    const baseX = cssX / zoom;
+    const baseY = cssY / zoom;
+
     const scaleX = rect.width > 0 ? canvas.width / rect.width : 1;
     const scaleY = rect.height > 0 ? canvas.height / rect.height : 1;
     const drawX = cssX * scaleX;
@@ -1414,17 +1809,20 @@ export function EditConfig({ files, onProcess, slug }: EditConfigProps) {
       setIsDrawing(true);
     } else if (activeTool === "whiteout" || activeTool === "shape") {
       setIsCreatingBox(true);
-      setBoxStart({ x: cssX, y: cssY });
-      setCurrentDragRect({ x: cssX, y: cssY, width: 0, height: 0 });
+      setBoxStart({ x: baseX, y: baseY });
+      setCurrentDragRect({ x: baseX, y: baseY, width: 0, height: 0 });
     }
   };
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = drawCanvasRef.current;
+  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>, pNum?: number) => {
+    const targetPage = pNum || currentPage;
+    const canvas = drawCanvasRefs.current[targetPage] || drawCanvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
     const cssX = e.clientX - rect.left;
     const cssY = e.clientY - rect.top;
+    const baseX = cssX / zoom;
+    const baseY = cssY / zoom;
 
     if (isDrawing) {
       const scaleX = rect.width > 0 ? canvas.width / rect.width : 1;
@@ -1436,36 +1834,37 @@ export function EditConfig({ files, onProcess, slug }: EditConfigProps) {
       ctx.lineTo(drawX, drawY);
       ctx.stroke();
     } else if (isCreatingBox && boxStart) {
-      const left = Math.min(cssX, boxStart.x);
-      const top = Math.min(cssY, boxStart.y);
-      const width = Math.abs(cssX - boxStart.x);
-      const height = Math.abs(cssY - boxStart.y);
+      const left = Math.min(baseX, boxStart.x);
+      const top = Math.min(baseY, boxStart.y);
+      const width = Math.abs(baseX - boxStart.x);
+      const height = Math.abs(baseY - boxStart.y);
       setCurrentDragRect({ x: left, y: top, width, height });
     }
   };
 
-  const handleMouseUp = () => {
+  const handleMouseUp = (pNum?: number) => {
+    const targetPage = pNum || currentPage;
     if (isDrawing) {
       setIsDrawing(false);
-      const canvas = drawCanvasRef.current;
+      const canvas = drawCanvasRefs.current[targetPage] || drawCanvasRef.current;
       if (canvas) {
         const ctx = canvas.getContext("2d");
         if (ctx) {
           const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
           setDrawActions(prev => ({
             ...prev,
-            [currentPage]: [...(prev[currentPage] || []), data]
+            [targetPage]: [...(prev[targetPage] || []), data]
           }));
         }
       }
     } else if (isCreatingBox && currentDragRect) {
       setIsCreatingBox(false);
-      if (currentDragRect.width > 8 && currentDragRect.height > 8) {
+      if (currentDragRect.width > 6 && currentDragRect.height > 6) {
         takeSnapshot();
         if (activeTool === "whiteout") {
           const newWhiteout: WhiteoutAnnotation = {
             id: `wo-${Date.now()}`,
-            page: currentPage,
+            page: targetPage,
             ...currentDragRect,
             color: "#ffffff",
           };
@@ -1474,7 +1873,7 @@ export function EditConfig({ files, onProcess, slug }: EditConfigProps) {
         } else if (activeTool === "shape") {
           const newShape: ShapeAnnotation = {
             id: `shape-${Date.now()}`,
-            page: currentPage,
+            page: targetPage,
             type: selectedShapeType,
             ...currentDragRect,
             strokeColor: selectedColor,
@@ -1493,25 +1892,26 @@ export function EditConfig({ files, onProcess, slug }: EditConfigProps) {
   };
 
   // Canvas Click: Add new text box or deselect
-  const handleCanvasClick = (e: React.MouseEvent<HTMLDivElement>) => {
+  const handleCanvasClick = (e: React.MouseEvent<HTMLDivElement>, pNum?: number) => {
+    const targetPage = pNum || currentPage;
     if (activeTool === "add-text") {
-      const canvas = drawCanvasRef.current;
+      const canvas = pageCanvasRefs.current[targetPage] || pdfCanvasRef.current;
       if (!canvas) return;
       const rect = canvas.getBoundingClientRect();
-      const x = Math.max(10, e.clientX - rect.left);
-      const y = Math.max(10, e.clientY - rect.top);
+      const x = Math.max(10, (e.clientX - rect.left) / zoom);
+      const y = Math.max(10, (e.clientY - rect.top) / zoom);
 
       takeSnapshot();
       const newId = `new-txt-${Date.now()}`;
       const newText: EditableText = {
         id: newId,
-        page: currentPage,
+        page: targetPage,
         originalText: "",
         currentText: "New text",
         x,
         y,
         width: 160,
-        height: fontSize * zoom * 1.2,
+        height: fontSize * 1.2,
         fontSize,
         fontFamily,
         isBold,
@@ -1520,6 +1920,7 @@ export function EditConfig({ files, onProcess, slug }: EditConfigProps) {
         bgColor: "#ffffff",
         bgRgb: [255, 255, 255],
         align: "left",
+        lineHeight: fontSize * 1.25,
         isOriginal: false,
         whiteoutOriginal: false,
       };
@@ -1540,11 +1941,20 @@ export function EditConfig({ files, onProcess, slug }: EditConfigProps) {
   useEffect(() => {
     const handleGlobalMouseMove = (e: MouseEvent) => {
       if (draggingItemId) {
-        const canvas = pdfCanvasRef.current;
+        const targetPage = (
+          draggingItemId.type === "image" ? images.find(i => i.id === draggingItemId.id)?.page :
+          draggingItemId.type === "text" ? textList.find(t => t.id === draggingItemId.id)?.page :
+          draggingItemId.type === "shape" ? shapes.find(s => s.id === draggingItemId.id)?.page :
+          draggingItemId.type === "whiteout" ? whiteouts.find(w => w.id === draggingItemId.id)?.page :
+          draggingItemId.type === "embedded-image" ? embeddedImages.find(emb => emb.id === draggingItemId.id)?.page :
+          currentPage
+        ) || currentPage;
+
+        const canvas = pageCanvasRefs.current[targetPage] || pdfCanvasRef.current;
         if (!canvas) return;
         const rect = canvas.getBoundingClientRect();
-        const mouseX = e.clientX - rect.left;
-        const mouseY = e.clientY - rect.top;
+        const mouseX = (e.clientX - rect.left) / zoom;
+        const mouseY = (e.clientY - rect.top) / zoom;
         const newX = Math.max(0, mouseX - dragOffset.x);
         const newY = Math.max(0, mouseY - dragOffset.y);
 
@@ -1556,10 +1966,12 @@ export function EditConfig({ files, onProcess, slug }: EditConfigProps) {
           setShapes(prev => prev.map(shp => shp.id === draggingItemId.id ? { ...shp, x: newX, y: newY } : shp));
         } else if (draggingItemId.type === "whiteout") {
           setWhiteouts(prev => prev.map(wo => wo.id === draggingItemId.id ? { ...wo, x: newX, y: newY } : wo));
+        } else if (draggingItemId.type === "embedded-image") {
+          setEmbeddedImages(prev => prev.map(emb => emb.id === draggingItemId.id ? { ...emb, x: newX, y: newY } : emb));
         }
       } else if (resizingItemId) {
-        const deltaX = e.clientX - resizeInitial.startX;
-        const deltaY = e.clientY - resizeInitial.startY;
+        const deltaX = (e.clientX - resizeInitial.startX) / zoom;
+        const deltaY = (e.clientY - resizeInitial.startY) / zoom;
         const newW = Math.max(24, resizeInitial.initialW + deltaX);
         const newH = Math.max(16, resizeInitial.initialH + deltaY);
 
@@ -1569,6 +1981,13 @@ export function EditConfig({ files, onProcess, slug }: EditConfigProps) {
           setShapes(prev => prev.map(shp => shp.id === resizingItemId.id ? { ...shp, width: newW, height: newH } : shp));
         } else if (resizingItemId.type === "whiteout") {
           setWhiteouts(prev => prev.map(wo => wo.id === resizingItemId.id ? { ...wo, width: newW, height: newH } : wo));
+        } else if (resizingItemId.type === "embedded-image") {
+          setEmbeddedImages(prev => prev.map(emb => emb.id === resizingItemId.id ? { ...emb, width: newW, height: newH } : emb));
+        } else if (resizingItemId.type === "text") {
+          setTextList(prev => prev.map(t => {
+            if (t.id !== resizingItemId.id) return t;
+            return { ...t, width: newW, height: newH, whiteoutOriginal: true };
+          }));
         }
       }
     };
@@ -1589,7 +2008,105 @@ export function EditConfig({ files, onProcess, slug }: EditConfigProps) {
       window.removeEventListener("mousemove", handleGlobalMouseMove);
       window.removeEventListener("mouseup", handleGlobalMouseUp);
     };
-  }, [draggingItemId, resizingItemId, dragOffset, resizeInitial, takeSnapshot]);
+  }, [draggingItemId, resizingItemId, dragOffset, resizeInitial, takeSnapshot, currentPage, images, textList, shapes, whiteouts, embeddedImages, zoom]);
+
+  // Native Pinch-To-Zoom (Punch In & Out), Trackpad Pinch & Ctrl/Cmd+Wheel Zoom
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    let isGesturing = false;
+    let gestureStartZoom = 0.75;
+    let initialTouchDist = 0;
+    let touchStartZoom = 0.75;
+
+    const handleWheel = (e: WheelEvent) => {
+      if (isGesturing) return;
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        let delta = 0;
+        if (Math.abs(e.deltaY) >= 50) {
+          // Physical mouse wheel notch with Ctrl / Command key
+          delta = -Math.sign(e.deltaY) * 0.1;
+        } else {
+          // Smooth trackpad pinch gesture (punch in / punch out)
+          delta = -e.deltaY * 0.008;
+        }
+        setZoom(prev => {
+          const next = Math.min(3.0, Math.max(0.25, Number((prev + delta).toFixed(2))));
+          return next;
+        });
+      }
+    };
+
+    const handleGestureStart = (e: any) => {
+      e.preventDefault();
+      isGesturing = true;
+      gestureStartZoom = zoomRef.current;
+    };
+
+    const handleGestureChange = (e: any) => {
+      e.preventDefault();
+      if (typeof e.scale === "number") {
+        const next = Math.min(3.0, Math.max(0.25, Number((gestureStartZoom * e.scale).toFixed(2))));
+        setZoom(next);
+      }
+    };
+
+    const handleGestureEnd = (e: any) => {
+      e.preventDefault();
+      setTimeout(() => {
+        isGesturing = false;
+      }, 50);
+    };
+
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        initialTouchDist = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY
+        );
+        touchStartZoom = zoomRef.current;
+      }
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 2 && initialTouchDist > 0) {
+        e.preventDefault();
+        const currentDist = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY
+        );
+        const scale = currentDist / initialTouchDist;
+        const next = Math.min(3.0, Math.max(0.25, Number((touchStartZoom * scale).toFixed(2))));
+        setZoom(next);
+      }
+    };
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      if (e.touches.length < 2) {
+        initialTouchDist = 0;
+      }
+    };
+
+    container.addEventListener("wheel", handleWheel, { passive: false });
+    container.addEventListener("gesturestart", handleGestureStart as any, { passive: false });
+    container.addEventListener("gesturechange", handleGestureChange as any, { passive: false });
+    container.addEventListener("gestureend", handleGestureEnd as any, { passive: false });
+    container.addEventListener("touchstart", handleTouchStart, { passive: false });
+    container.addEventListener("touchmove", handleTouchMove, { passive: false });
+    container.addEventListener("touchend", handleTouchEnd);
+
+    return () => {
+      container.removeEventListener("wheel", handleWheel);
+      container.removeEventListener("gesturestart", handleGestureStart as any);
+      container.removeEventListener("gesturechange", handleGestureChange as any);
+      container.removeEventListener("gestureend", handleGestureEnd as any);
+      container.removeEventListener("touchstart", handleTouchStart);
+      container.removeEventListener("touchmove", handleTouchMove);
+      container.removeEventListener("touchend", handleTouchEnd);
+    };
+  }, []);
 
   // Drag & Drop external images directly onto canvas
   const handleImageDropOnCanvas = (e: React.DragEvent<HTMLDivElement>) => {
@@ -1738,16 +2255,25 @@ export function EditConfig({ files, onProcess, slug }: EditConfigProps) {
       const timesRoman = await doc.embedFont(StandardFonts.TimesRoman);
       const timesRomanBold = await doc.embedFont(StandardFonts.TimesRomanBold);
       const timesRomanItalic = await doc.embedFont(StandardFonts.TimesRomanItalic);
+      const timesRomanBoldItalic = await doc.embedFont(StandardFonts.TimesRomanBoldItalic);
 
       const courier = await doc.embedFont(StandardFonts.Courier);
       const courierBold = await doc.embedFont(StandardFonts.CourierBold);
+      const courierOblique = await doc.embedFont(StandardFonts.CourierOblique);
+      const courierBoldOblique = await doc.embedFont(StandardFonts.CourierBoldOblique);
 
       const getFont = (family: string, bold: boolean, italic: boolean) => {
         if (family === "TimesRoman") {
-          return bold ? timesRomanBold : italic ? timesRomanItalic : timesRoman;
+          if (bold && italic) return timesRomanBoldItalic;
+          if (bold) return timesRomanBold;
+          if (italic) return timesRomanItalic;
+          return timesRoman;
         }
         if (family === "Courier") {
-          return bold ? courierBold : courier;
+          if (bold && italic) return courierBoldOblique;
+          if (bold) return courierBold;
+          if (italic) return courierOblique;
+          return courier;
         }
         if (bold && italic) return helveticaBoldOblique;
         if (bold) return helveticaBold;
@@ -1762,10 +2288,9 @@ export function EditConfig({ files, onProcess, slug }: EditConfigProps) {
         const pageWidth = page.getWidth();
         const pageHeight = page.getHeight();
 
-        const canvasWidth = pdfCanvasRef.current ? (parseFloat(pdfCanvasRef.current.style.width) || pdfCanvasRef.current.width) : pageWidth;
-        const canvasHeight = pdfCanvasRef.current ? (parseFloat(pdfCanvasRef.current.style.height) || pdfCanvasRef.current.height) : pageHeight;
-        const scaleX = pageWidth / canvasWidth;
-        const scaleY = pageHeight / canvasHeight;
+        const baseDim = pageDimensions[pNum];
+        const scaleX = baseDim?.width ? pageWidth / baseDim.width : 1;
+        const scaleY = baseDim?.height ? pageHeight / baseDim.height : 1;
 
         const extraRotation = pageRotations[pNum] || 0;
         if (extraRotation !== 0) {
@@ -1838,19 +2363,27 @@ export function EditConfig({ files, onProcess, slug }: EditConfigProps) {
           }
         }
 
-        // 3. Apply Text Edits & Whiteouts
+        // 3. Apply Text Edits & Whiteouts with Multi-line Wrapping & Justification
         const pageTexts = textList.filter(t => t.page === pNum);
-        for (const item of pageTexts) {
-          const isModified = item.isOriginal && (
-            item.whiteoutOriginal ||
-            item.currentText !== item.originalText
-          );
-          const isNew = !item.isOriginal;
+        const pageYShifts = calculatePageYShifts(pageTexts);
 
-          if (isModified) {
+        for (const item of pageTexts) {
+          const yShift = pageYShifts.get(item.id) || 0;
+          const isTextChanged = item.isOriginal && item.currentText.trim() !== item.originalText.trim();
+          const isDimensionChanged = item.isOriginal && (
+            (item.origWidth !== undefined && Math.abs(item.width - item.origWidth) > 3) ||
+            (item.origHeight !== undefined && Math.abs(item.height - item.origHeight) > 3) ||
+            (item.origX !== undefined && Math.abs(item.x - item.origX) > 3) ||
+            (item.origY !== undefined && Math.abs(item.y - item.origY) > 3)
+          );
+          const isModified = isTextChanged || isDimensionChanged;
+          const isNew = !item.isOriginal;
+          const isShiftedOriginal = item.isOriginal && !isModified && yShift > 0;
+
+          if (isModified || isShiftedOriginal) {
             const isTransparent = item.bgColor === "transparent" || item.bgColor === "none";
+            let bgR = 1, bgG = 1, bgB = 1;
             if (!isTransparent) {
-              let bgR = 1, bgG = 1, bgB = 1;
               if (item.bgRgb && item.bgRgb.length === 3) {
                 bgR = item.bgRgb[0] / 255;
                 bgG = item.bgRgb[1] / 255;
@@ -1861,19 +2394,20 @@ export function EditConfig({ files, onProcess, slug }: EditConfigProps) {
                 bgB = parseInt(item.bgColor.slice(5, 7), 16) / 255;
               }
 
+              // Cleanly erase original content with matching background color
               if (item.rawBoxes && item.rawBoxes.length > 0) {
                 for (const box of item.rawBoxes) {
                   const bPdfX = box.origPdfX;
                   const bPdfY = box.origPdfY;
                   const bWidth = box.origWidth;
                   const bHeight = box.origHeight;
-                  const desc = bHeight * 0.28;
+                  const desc = bHeight * 0.32;
 
                   page.drawRectangle({
-                    x: Math.max(0, bPdfX - 0.5),
+                    x: Math.max(0, bPdfX - 2.5),
                     y: Math.max(0, bPdfY - desc),
-                    width: bWidth + 1,
-                    height: bHeight * 1.25,
+                    width: bWidth + 5,
+                    height: bHeight * 1.38,
                     color: rgb(bgR, bgG, bgB),
                   });
                 }
@@ -1884,10 +2418,10 @@ export function EditConfig({ files, onProcess, slug }: EditConfigProps) {
                 const origH = item.origHeight !== undefined ? item.origHeight : item.fontSize;
 
                 page.drawRectangle({
-                  x: Math.max(0, origX - 0.5),
-                  y: Math.max(0, origY - (origH * 0.28)),
-                  width: origW + 1,
-                  height: origH * 1.25,
+                  x: Math.max(0, origX - 2.5),
+                  y: Math.max(0, origY - (origH * 0.32)),
+                  width: origW + 5,
+                  height: origH * 1.38,
                   color: rgb(bgR, bgG, bgB),
                 });
               }
@@ -1898,32 +2432,98 @@ export function EditConfig({ files, onProcess, slug }: EditConfigProps) {
               const chosenFont = getFont(item.fontFamily, item.isBold, item.isItalic);
               const [r, g, b] = parseColorToRgb(item.color);
 
-              let textWidth = 0;
-              try {
-                textWidth = chosenFont.widthOfTextAtSize(sanitizedText, item.fontSize);
-              } catch {
-                textWidth = sanitizedText.length * item.fontSize * 0.55;
+              const startPdfX = item.origPdfX !== undefined ? item.origPdfX : item.x * scaleX;
+              const startPdfBaselineY = (item.lines && item.lines[0]?.origPdfY !== undefined)
+                ? (item.lines[0].origPdfY - (yShift * scaleY))
+                : (pageHeight - ((item.y + yShift + (item.fontSize * 0.82)) * scaleY));
+
+              const targetWidthPt = item.width * scaleX;
+              const lineHeightPt = (item.lines && item.lines.length >= 2 && item.lines[0].origPdfY !== undefined && item.lines[1].origPdfY !== undefined)
+                ? Math.abs(item.lines[0].origPdfY - item.lines[1].origPdfY)
+                : ((item.lineHeight || (item.fontSize * 1.25)) * scaleY);
+
+              // Wrap text cleanly into lines respecting targetWidthPt without shrinking font
+              const wrappedLines = wrapTextIntoLines(sanitizedText, chosenFont, item.fontSize, targetWidthPt);
+
+              for (let li = 0; li < wrappedLines.length; li++) {
+                const lineStr = wrappedLines[li];
+                if (!lineStr || lineStr.trim() === "") continue;
+
+                let lineBaselineY = startPdfBaselineY - (li * lineHeightPt);
+                const isUnchanged = item.currentText === item.originalText && Math.abs(item.width - (item.origWidth || item.width)) < 4;
+                if (isUnchanged && item.lines && item.lines[li]?.origPdfY !== undefined) {
+                  lineBaselineY = (item.lines[li]?.origPdfY ?? startPdfBaselineY) - (yShift * scaleY);
+                }
+
+                let lineWidth = 0;
+                try {
+                  lineWidth = chosenFont.widthOfTextAtSize(lineStr, item.fontSize);
+                } catch {
+                  lineWidth = lineStr.length * item.fontSize * 0.52;
+                }
+
+                const isLastLine = li === wrappedLines.length - 1;
+                const shouldJustify = item.align === "justify" && !isLastLine;
+
+                if (shouldJustify) {
+                  const words = lineStr.split(/\s+/).filter(Boolean);
+                  if (words.length > 1) {
+                    let totalWordWidth = 0;
+                    const wordWidths = words.map(w => {
+                      try {
+                        const ww = chosenFont.widthOfTextAtSize(w, item.fontSize);
+                        totalWordWidth += ww;
+                        return ww;
+                      } catch {
+                        const ww = w.length * item.fontSize * 0.52;
+                        totalWordWidth += ww;
+                        return ww;
+                      }
+                    });
+
+                    const availableSpace = targetWidthPt - totalWordWidth;
+                    const gapCount = words.length - 1;
+                    const spacePerGap = gapCount > 0 ? (availableSpace / gapCount) : 0;
+                    let normalSpaceW = 0;
+                    try {
+                      normalSpaceW = chosenFont.widthOfTextAtSize(" ", item.fontSize);
+                    } catch {
+                      normalSpaceW = item.fontSize * 0.25;
+                    }
+
+                    if (spacePerGap >= normalSpaceW * 0.5 && spacePerGap <= normalSpaceW * 4.0) {
+                      let curWordX = startPdfX;
+                      for (let wi = 0; wi < words.length; wi++) {
+                        page.drawText(words[wi], {
+                          x: Math.max(0, curWordX),
+                          y: Math.max(0, lineBaselineY),
+                          size: item.fontSize,
+                          font: chosenFont,
+                          color: rgb(r, g, b),
+                        });
+                        curWordX += wordWidths[wi] + spacePerGap;
+                      }
+                      continue;
+                    }
+                  }
+                }
+
+                // Left, Center, Right, or Justify fallback alignment
+                let lineX = startPdfX;
+                if (item.align === "center") {
+                  lineX = startPdfX + Math.max(0, (targetWidthPt - lineWidth) / 2);
+                } else if (item.align === "right") {
+                  lineX = startPdfX + Math.max(0, targetWidthPt - lineWidth);
+                }
+
+                page.drawText(lineStr, {
+                  x: Math.max(0, lineX),
+                  y: Math.max(0, lineBaselineY),
+                  size: item.fontSize,
+                  font: chosenFont,
+                  color: rgb(r, g, b),
+                });
               }
-
-              const pdfX = item.origPdfX !== undefined ? item.origPdfX : item.x * scaleX;
-              const pdfBaselineY = item.origPdfY !== undefined
-                ? item.origPdfY
-                : (pageHeight - ((item.y + (item.fontSize * zoom * 0.82)) * scaleY));
-
-              let targetX = pdfX;
-              if (item.align === "center") {
-                targetX = pdfX + ((item.width * scaleX - textWidth) / 2);
-              } else if (item.align === "right") {
-                targetX = pdfX + (item.width * scaleX - textWidth);
-              }
-
-              page.drawText(sanitizedText, {
-                x: Math.max(0, targetX),
-                y: Math.max(0, pdfBaselineY),
-                size: item.fontSize,
-                font: chosenFont,
-                color: rgb(r, g, b),
-              });
             }
           } else if (isNew) {
             const sanitizedText = cleanTextForPdf(item.currentText);
@@ -1931,30 +2531,40 @@ export function EditConfig({ files, onProcess, slug }: EditConfigProps) {
               const chosenFont = getFont(item.fontFamily, item.isBold, item.isItalic);
               const [r, g, b] = parseColorToRgb(item.color);
 
-              let textWidth = 0;
-              try {
-                textWidth = chosenFont.widthOfTextAtSize(sanitizedText, item.fontSize);
-              } catch {
-                textWidth = sanitizedText.length * item.fontSize * 0.55;
-              }
-
               const pdfX = item.x * scaleX;
-              const pdfBaselineY = pageHeight - ((item.y + (item.fontSize * zoom * 0.82)) * scaleY);
+              const pdfBaselineY = pageHeight - ((item.y + (item.fontSize * 0.82)) * scaleY);
+              const targetWidthPt = (item.width || 200) * scaleX;
+              const lineHeightPt = (item.lineHeight || (item.fontSize * 1.25)) * scaleY;
 
-              let targetX = pdfX;
-              if (item.align === "center") {
-                targetX = pdfX - (textWidth / 2);
-              } else if (item.align === "right") {
-                targetX = pdfX - textWidth;
+              const wrappedLines = wrapTextIntoLines(sanitizedText, chosenFont, item.fontSize, targetWidthPt);
+
+              for (let li = 0; li < wrappedLines.length; li++) {
+                const lineStr = wrappedLines[li];
+                if (!lineStr || lineStr.trim() === "") continue;
+
+                const lineBaselineY = pdfBaselineY - (li * lineHeightPt);
+                let lineWidth = 0;
+                try {
+                  lineWidth = chosenFont.widthOfTextAtSize(lineStr, item.fontSize);
+                } catch {
+                  lineWidth = lineStr.length * item.fontSize * 0.52;
+                }
+
+                let lineX = pdfX;
+                if (item.align === "center") {
+                  lineX = pdfX + Math.max(0, (targetWidthPt - lineWidth) / 2);
+                } else if (item.align === "right") {
+                  lineX = pdfX + Math.max(0, targetWidthPt - lineWidth);
+                }
+
+                page.drawText(lineStr, {
+                  x: Math.max(0, lineX),
+                  y: Math.max(0, lineBaselineY),
+                  size: item.fontSize,
+                  font: chosenFont,
+                  color: rgb(r, g, b),
+                });
               }
-
-              page.drawText(sanitizedText, {
-                x: Math.max(0, targetX),
-                y: Math.max(0, pdfBaselineY),
-                size: item.fontSize,
-                font: chosenFont,
-                color: rgb(r, g, b),
-              });
             }
           }
         }
@@ -2142,7 +2752,7 @@ export function EditConfig({ files, onProcess, slug }: EditConfigProps) {
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto flex flex-col items-center">
+    <div className="w-full h-full flex-1 flex flex-col min-h-0 mx-auto">
       {/* Hidden File Input for Adding Images */}
       <input
         ref={imageInputRef}
@@ -2163,7 +2773,7 @@ export function EditConfig({ files, onProcess, slug }: EditConfigProps) {
 
       {/* Modern Scan Progress Notification */}
       {scanProgress && (
-        <div className="w-full max-w-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-2xl px-5 py-2.5 mb-3 shadow-lg flex items-center justify-between text-xs font-semibold animate-in fade-in slide-in-from-top-2 duration-300">
+        <div className="w-full max-w-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-2xl px-5 py-2.5 mb-2 shadow-lg flex items-center justify-between text-xs font-semibold animate-in fade-in slide-in-from-top-2 duration-300 shrink-0">
           <div className="flex items-center gap-2.5">
             {isScanning ? (
               <Loader2 className="w-4 h-4 animate-spin text-blue-200" />
@@ -2185,24 +2795,24 @@ export function EditConfig({ files, onProcess, slug }: EditConfigProps) {
       {/* ========================================================================= */}
       {/* MAIN TOP TOOLBAR                                                          */}
       {/* ========================================================================= */}
-      <div className="w-full bg-white/95 backdrop-blur-md border border-slate-200/90 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.06)] rounded-2xl p-2 mb-3.5 flex items-center justify-between gap-2.5 sticky top-3 z-40 overflow-x-auto no-scrollbar">
+      <div className="w-full bg-white/95 backdrop-blur-md border border-slate-200/90 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.06)] rounded-2xl p-2 mb-2 flex items-center justify-between gap-3 shrink-0 z-40 overflow-hidden">
         
         {/* Left: Tools Group */}
-        <div className="flex items-center gap-1.5 shrink-0">
-          <div className="flex items-center gap-0.5 bg-slate-100/90 p-1 rounded-xl border border-slate-200/60">
+        <div className="flex items-center gap-1.5 min-w-0 overflow-x-auto no-scrollbar py-0.5">
+          <div className="flex items-center gap-0.5 bg-slate-100/90 p-1 rounded-xl border border-slate-200/60 shrink-0">
             <button
               type="button"
               onClick={() => {
                 setActiveTool("select");
                 setActiveTextId(null);
               }}
-              className={`px-3 py-1.5 rounded-lg font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+              className={`px-2.5 py-1.5 rounded-lg font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
                 activeTool === "select" ? "bg-[#E5322D] text-white shadow-xs" : "text-slate-600 hover:text-slate-900 hover:bg-white/80"
               }`}
               title="Select tool"
             >
               <MousePointer className="w-3.5 h-3.5" />
-              <span>Select</span>
+              <span className="hidden md:inline">Select</span>
             </button>
 
             <button
@@ -2212,7 +2822,7 @@ export function EditConfig({ files, onProcess, slug }: EditConfigProps) {
                 setActiveEmbeddedImgId(null);
                 setActiveImageId(null);
               }}
-              className={`px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+              className={`px-2.5 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
                 activeTool === "edit-text" ? "bg-[#E5322D] text-white shadow-xs" : "text-slate-600 hover:text-slate-900 hover:bg-white/80"
               }`}
               title="Click any text on the page to edit in place"
@@ -2231,93 +2841,93 @@ export function EditConfig({ files, onProcess, slug }: EditConfigProps) {
             <button
               type="button"
               onClick={() => setActiveTool("add-text")}
-              className={`px-3 py-1.5 rounded-lg font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+              className={`px-2.5 py-1.5 rounded-lg font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
                 activeTool === "add-text" ? "bg-[#E5322D] text-white shadow-xs" : "text-slate-600 hover:text-slate-900 hover:bg-white/80"
               }`}
               title="Click anywhere to add a new text box"
             >
               <Type className="w-3.5 h-3.5" />
-              <span>Add Text</span>
+              <span className="hidden sm:inline">Add Text</span>
             </button>
 
             <button
               type="button"
               onClick={() => setShowSignatureModal(true)}
-              className="px-3 py-1.5 rounded-lg font-semibold text-xs flex items-center gap-1.5 text-blue-600 hover:bg-blue-50/80 transition-all cursor-pointer"
+              className="px-2.5 py-1.5 rounded-lg font-semibold text-xs flex items-center gap-1.5 text-blue-600 hover:bg-blue-50/80 transition-all cursor-pointer"
               title="Draw or type signature"
             >
               <FileSignature className="w-3.5 h-3.5" />
-              <span>Sign</span>
+              <span className="hidden lg:inline">Sign</span>
             </button>
 
             <button
               type="button"
               onClick={() => imageInputRef.current?.click()}
-              className="px-3 py-1.5 rounded-lg font-semibold text-xs flex items-center gap-1.5 text-slate-700 hover:bg-white/80 transition-all cursor-pointer"
+              className="px-2.5 py-1.5 rounded-lg font-semibold text-xs flex items-center gap-1.5 text-slate-700 hover:bg-white/80 transition-all cursor-pointer"
               title="Add image"
             >
               <ImageIcon className="w-3.5 h-3.5 text-amber-600" />
-              <span>Image</span>
+              <span className="hidden lg:inline">Image</span>
             </button>
 
             <button
               type="button"
               onClick={() => setActiveTool("whiteout")}
-              className={`px-3 py-1.5 rounded-lg font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+              className={`px-2.5 py-1.5 rounded-lg font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
                 activeTool === "whiteout" ? "bg-[#E5322D] text-white shadow-xs" : "text-slate-600 hover:text-slate-900 hover:bg-white/80"
               }`}
               title="Drag to erase/whiteout content"
             >
               <Eraser className="w-3.5 h-3.5" />
-              <span>Whiteout</span>
+              <span className="hidden xl:inline">Whiteout</span>
             </button>
 
             <button
               type="button"
               onClick={() => setActiveTool("shape")}
-              className={`px-3 py-1.5 rounded-lg font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+              className={`px-2.5 py-1.5 rounded-lg font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
                 activeTool === "shape" ? "bg-[#E5322D] text-white shadow-xs" : "text-slate-600 hover:text-slate-900 hover:bg-white/80"
               }`}
               title="Draw shapes"
             >
               <Square className="w-3.5 h-3.5" />
-              <span>Shapes</span>
+              <span className="hidden xl:inline">Shapes</span>
             </button>
 
             <button
               type="button"
               onClick={() => setActiveTool("draw")}
-              className={`px-3 py-1.5 rounded-lg font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+              className={`px-2.5 py-1.5 rounded-lg font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
                 activeTool === "draw" ? "bg-[#E5322D] text-white shadow-xs" : "text-slate-600 hover:text-slate-900 hover:bg-white/80"
               }`}
               title="Pen"
             >
               <PenLine className="w-3.5 h-3.5" />
-              <span>Pen</span>
+              <span className="hidden 2xl:inline">Pen</span>
             </button>
 
             <button
               type="button"
               onClick={() => setActiveTool("highlight")}
-              className={`px-3 py-1.5 rounded-lg font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+              className={`px-2.5 py-1.5 rounded-lg font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
                 activeTool === "highlight" ? "bg-[#E5322D] text-white shadow-xs" : "text-slate-600 hover:text-slate-900 hover:bg-white/80"
               }`}
               title="Highlighter"
             >
               <Highlighter className="w-3.5 h-3.5 text-amber-500" />
-              <span>Highlight</span>
+              <span className="hidden 2xl:inline">Highlight</span>
             </button>
 
             <button
               type="button"
               onClick={() => setShowFindReplace(prev => !prev)}
-              className={`px-3 py-1.5 rounded-lg font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+              className={`px-2.5 py-1.5 rounded-lg font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
                 showFindReplace ? "bg-purple-600 text-white shadow-xs" : "text-slate-600 hover:text-slate-900 hover:bg-white/80"
               }`}
               title="Find & Replace text"
             >
               <Search className="w-3.5 h-3.5 text-purple-600" />
-              <span className="hidden sm:inline">Find & Replace</span>
+              <span className="hidden 2xl:inline">Find</span>
             </button>
           </div>
 
@@ -2361,115 +2971,39 @@ export function EditConfig({ files, onProcess, slug }: EditConfigProps) {
           )}
         </div>
 
-        {/* Vertical Divider */}
-        <div className="h-6 w-px bg-slate-200 shrink-0 hidden md:block" />
-
-        {/* Right: Navigation, Zoom & Save */}
-        <div className="flex items-center gap-2 shrink-0">
-          {/* Toggle Thumbnails Sidebar */}
-          {totalPages > 0 && (
-            <button
-              type="button"
-              onClick={() => setShowThumbnailsSidebar(prev => !prev)}
-              className={`px-2.5 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                showThumbnailsSidebar ? "bg-blue-50 text-blue-600 border-blue-200 shadow-2xs" : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
-              }`}
-              title="Toggle Pages Sidebar"
-            >
-              <Layers className="w-3.5 h-3.5" />
-              <span className="hidden lg:inline">Pages ({totalPages})</span>
-            </button>
-          )}
-
-          {totalPages > 1 && (
-            <div className="flex items-center gap-1 bg-slate-50 px-2 py-1 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700">
-              <button
-                type="button"
-                disabled={currentPage <= 1}
-                onClick={() => {
-                  setCurrentPage(p => Math.max(1, p - 1));
-                  setActiveTextId(null);
-                }}
-                className="p-1 hover:bg-white hover:shadow-xs rounded-md disabled:opacity-30 cursor-pointer transition-all"
-              >
-                <ChevronLeft className="w-3.5 h-3.5" />
-              </button>
-              <span className="text-[11px] whitespace-nowrap">{currentPage} / {totalPages}</span>
-              <button
-                type="button"
-                disabled={currentPage >= totalPages}
-                onClick={() => {
-                  setCurrentPage(p => Math.min(totalPages, p + 1));
-                  setActiveTextId(null);
-                }}
-                className="p-1 hover:bg-white hover:shadow-xs rounded-md disabled:opacity-30 cursor-pointer transition-all"
-              >
-                <ChevronRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          )}
-
-          {/* Rotate Page */}
+        {/* Right: Navigation, Styles & Save */}
+        <div className="flex items-center gap-2 shrink-0 ml-auto pl-2">
+          {/* Toggle Sidebar Buttons */}
           <button
             type="button"
-            onClick={handleRotatePage}
-            className="p-1.5 bg-slate-50 hover:bg-slate-100 rounded-xl border border-slate-200 text-slate-600 cursor-pointer transition-colors"
-            title="Rotate Page 90° Clockwise"
+            onClick={() => setShowThumbnailsSidebar(s => !s)}
+            className={`px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
+              showThumbnailsSidebar ? "bg-blue-50 border-blue-200 text-blue-700 shadow-2xs" : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+            }`}
+            title="Toggle Pages Sidebar"
           >
-            <RotateCw className="w-3.5 h-3.5" />
+            <Layers className="w-3.5 h-3.5 text-blue-600" />
+            <span>Pages ({totalPages})</span>
           </button>
 
-          {/* Zoom Controls */}
-          <div className="flex items-center gap-0.5 bg-slate-50 p-1 rounded-xl border border-slate-200">
-            <button
-              type="button"
-              onClick={() => setZoom(z => Math.max(0.6, z - 0.2))}
-              className="p-1 hover:bg-white hover:shadow-xs rounded-md text-slate-600 cursor-pointer transition-all"
-              title="Zoom Out"
-            >
-              <ZoomOut className="w-3.5 h-3.5" />
-            </button>
-            <span className="text-[11px] font-bold text-slate-700 min-w-[2.6rem] text-center">
-              {Math.round(zoom * 100)}%
-            </span>
-            <button
-              type="button"
-              onClick={() => setZoom(z => Math.min(2.2, z + 0.2))}
-              className="p-1 hover:bg-white hover:shadow-xs rounded-md text-slate-600 cursor-pointer transition-all"
-              title="Zoom In"
-            >
-              <ZoomIn className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          {/* Undo / Redo */}
-          <div className="flex items-center gap-0.5 bg-slate-50 p-1 rounded-xl border border-slate-200">
-            <button
-              type="button"
-              onClick={handleUndo}
-              disabled={undoStack.length === 0}
-              className="p-1 hover:bg-white hover:shadow-xs rounded-md text-slate-600 disabled:opacity-30 cursor-pointer transition-all"
-              title="Undo (Ctrl+Z)"
-            >
-              <Undo2 className="w-3.5 h-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={handleRedo}
-              disabled={redoStack.length === 0}
-              className="p-1 hover:bg-white hover:shadow-xs rounded-md text-slate-600 disabled:opacity-30 cursor-pointer transition-all"
-              title="Redo (Ctrl+Shift+Z)"
-            >
-              <Redo2 className="w-3.5 h-3.5" />
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => setShowInspectorSidebar(s => !s)}
+            className={`px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
+              showInspectorSidebar ? "bg-blue-50 border-blue-200 text-blue-700 shadow-2xs" : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+            }`}
+            title="Toggle Styles Inspector"
+          >
+            <SlidersHorizontal className="w-3.5 h-3.5 text-blue-600" />
+            <span>Styles</span>
+          </button>
 
           {/* Primary Save Action */}
           <button
             type="button"
             onClick={handleSaveAndProcess}
             disabled={isSaving}
-            className="cursor-pointer bg-gradient-to-r from-[#E5322D] to-[#D92D27] hover:from-[#CC2A26] hover:to-[#C02622] text-white px-4 py-2 rounded-xl font-bold text-xs shadow-sm hover:shadow-md flex items-center gap-2 active:scale-95 transition-all disabled:opacity-75 shrink-0"
+            className="cursor-pointer bg-[#E5322D] hover:bg-[#CC2A26] text-white px-4 py-2 rounded-xl font-bold text-xs shadow-sm hover:shadow-md flex items-center gap-1.5 active:scale-95 transition-all disabled:opacity-75 shrink-0 whitespace-nowrap"
           >
             {isSaving ? (
               <>
@@ -2479,12 +3013,14 @@ export function EditConfig({ files, onProcess, slug }: EditConfigProps) {
             ) : (
               <>
                 <Download className="w-3.5 h-3.5" />
-                <span>{isSignTool ? "Sign & Download PDF" : "Save & Download PDF"}</span>
+                <span>{isSignTool ? "Sign & Download" : "Save & Download"}</span>
               </>
             )}
           </button>
         </div>
       </div>
+
+
 
       {/* ========================================================================= */}
       {/* FIND & REPLACE FLOATING MODAL                                             */}
@@ -2564,113 +3100,146 @@ export function EditConfig({ files, onProcess, slug }: EditConfigProps) {
           }}
         />
       )}
-
+      {/* UNIFIED 3-COLUMN STUDIO WORKSPACE (Modern Professional PDF Editor Layout) */}
       {/* ========================================================================= */}
-      {/* STUDIO LAYOUT: Left Page Thumbnails Sidebar + Main Document Canvas        */}
-      {/* ========================================================================= */}
-      <div className="w-full flex items-start gap-4 justify-center">
-        {/* Left Thumbnails Sidebar */}
-        {showThumbnailsSidebar && totalPages > 0 && (
-          <div className="w-52 shrink-0 bg-white/95 backdrop-blur-md border border-slate-200/90 rounded-2xl p-3 shadow-xs flex flex-col gap-2.5 sticky top-20 max-h-[82vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-              <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                <Layers className="w-3.5 h-3.5 text-blue-600" /> Pages ({totalPages})
-              </span>
-              <button
-                type="button"
-                onClick={() => setShowThumbnailsSidebar(false)}
-                className="p-1 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-700 cursor-pointer transition-colors"
-                title="Hide Thumbnails Sidebar"
-              >
-                <PanelLeftClose className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            {/* List of Pages */}
-            <div className="flex flex-col gap-2">
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map(pNum => {
-                const isActive = currentPage === pNum;
-                const thumbUrl = pageThumbnails[pNum];
-                const stats = pageStats[pNum];
-
-                return (
-                  <div
-                    key={pNum}
-                    onClick={() => {
-                      setCurrentPage(pNum);
-                      setActiveTextId(null);
-                      setActiveImageId(null);
-                      setActiveEmbeddedImgId(null);
-                    }}
-                    className={`group relative rounded-xl p-1.5 border-2 transition-all cursor-pointer ${
-                      isActive
-                        ? "border-blue-600 bg-blue-50/50 shadow-xs ring-2 ring-blue-500/20"
-                        : "border-slate-200/80 hover:border-slate-300 hover:bg-slate-50/80"
+      <div className="w-full flex-1 min-h-0 bg-white border border-slate-200/90 rounded-2xl shadow-sm overflow-hidden flex flex-col">
+        {/* 3-COLUMN WORKSPACE BODY */}
+        <div className="w-full flex-1 min-h-0 flex items-stretch overflow-hidden">
+          {/* COLUMN 1: LEFT THUMBNAILS PANEL */}
+          {showThumbnailsSidebar && totalPages > 0 && (
+            <div className="w-48 sm:w-52 shrink-0 bg-white border-r border-slate-200 flex flex-col overflow-hidden select-none">
+              {/* Top 4 Navigation Tabs (Reference style) */}
+              <div className="p-2 border-b border-slate-200 flex items-center justify-between gap-1 bg-white">
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setSidebarTab("thumbnails")}
+                    className={`p-1.5 rounded transition-colors ${
+                      sidebarTab === "thumbnails"
+                        ? "bg-blue-600 text-white shadow-xs"
+                        : "text-slate-600 hover:bg-slate-100"
                     }`}
+                    title="Pages"
                   >
-                    {/* Thumbnail Image */}
-                    <div className="w-full aspect-[1/1.3] bg-white rounded-lg border border-slate-200 overflow-hidden flex items-center justify-center shadow-[0_2px_4px_rgba(0,0,0,0.04)]">
-                      {thumbUrl ? (
-                        <img src={thumbUrl} alt={`Page ${pNum}`} className="w-full h-full object-contain pointer-events-none" />
-                      ) : (
-                        <div className="flex flex-col items-center justify-center text-slate-400 gap-1 text-[10px]">
-                          <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500" />
-                          <span>Scanning...</span>
-                        </div>
-                      )}
-                    </div>
+                    <Layers className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSidebarTab("outline")}
+                    className={`p-1.5 rounded transition-colors ${
+                      sidebarTab === "outline"
+                        ? "bg-blue-600 text-white shadow-xs"
+                        : "text-slate-600 hover:bg-slate-100"
+                    }`}
+                    title="Outline"
+                  >
+                    <List className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSidebarTab("bookmarks")}
+                    className={`p-1.5 rounded transition-colors ${
+                      sidebarTab === "bookmarks"
+                        ? "bg-blue-600 text-white shadow-xs"
+                        : "text-slate-600 hover:bg-slate-100"
+                    }`}
+                    title="Bookmarks"
+                  >
+                    <Bookmark className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSidebarTab("more")}
+                    className={`p-1.5 rounded transition-colors ${
+                      sidebarTab === "more"
+                        ? "bg-blue-600 text-white shadow-xs"
+                        : "text-slate-600 hover:bg-slate-100"
+                    }`}
+                    title="More Options"
+                  >
+                    <MoreHorizontal className="w-4 h-4" />
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowThumbnailsSidebar(false)}
+                  className="p-1 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-600 cursor-pointer"
+                  title="Close sidebar"
+                >
+                  <PanelLeftClose className="w-3.5 h-3.5" />
+                </button>
+              </div>
 
-                    {/* Page Number & Stats */}
-                    <div className="flex items-center justify-between mt-1.5 px-0.5">
-                      <span className={`text-[11px] font-bold ${isActive ? "text-blue-700" : "text-slate-700"}`}>
-                        Page {pNum}
-                      </span>
-                      {stats && (
-                        <span className="text-[9px] font-semibold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
-                          {stats.texts}T • {stats.images}Img
-                        </span>
-                      )}
-                    </div>
+              {/* Zoom Slider Bar below tabs */}
+              <div className="px-3 py-2 border-b border-slate-100 flex items-center gap-2 bg-slate-50/60">
+                <button
+                  type="button"
+                  onClick={() => setZoom(prev => Math.max(0.3, Number((prev - 0.05).toFixed(2))))}
+                  className="text-slate-500 hover:text-slate-800 text-xs font-bold px-1"
+                  title="Zoom Out"
+                >
+                  —
+                </button>
+                <input
+                  type="range"
+                  min="0.35"
+                  max="1.5"
+                  step="0.05"
+                  value={zoom}
+                  onChange={(e) => setZoom(parseFloat(e.target.value))}
+                  className="w-full accent-slate-700 h-1.5 bg-slate-200 rounded-lg cursor-pointer"
+                />
+                <button
+                  type="button"
+                  onClick={() => setZoom(prev => Math.min(2.0, Number((prev + 0.05).toFixed(2))))}
+                  className="text-slate-500 hover:text-slate-800 text-xs font-bold px-1"
+                  title="Zoom In"
+                >
+                  +
+                </button>
+              </div>
 
-                    {/* Action Button on Hover: Rotate Page */}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setPageRotations(prev => ({
-                          ...prev,
-                          [pNum]: ((prev[pNum] || 0) + 90) % 360
-                        }));
-                      }}
-                      className="absolute top-2.5 right-2.5 p-1 bg-white/95 hover:bg-white text-slate-700 rounded-md shadow-xs border border-slate-200 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-                      title="Rotate Page 90° Clockwise"
+              {/* Thumbnails list with smooth scrollToPage */}
+              <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-3.5">
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(pNum => {
+                  const isActive = currentPage === pNum;
+                  const thumbUrl = pageThumbnails[pNum];
+
+                  return (
+                    <div
+                      key={pNum}
+                      onClick={() => scrollToPage(pNum)}
+                      className="group flex flex-col items-center cursor-pointer gap-1.5"
                     >
-                      <RotateCw className="w-3 h-3" />
-                    </button>
-                  </div>
-                );
-              })}
+                      <div
+                        className={`w-full aspect-[1/1.3] bg-white rounded-md overflow-hidden flex items-center justify-center transition-all ${
+                          isActive
+                            ? "border-2 border-blue-600 ring-2 ring-blue-500/20 shadow-md"
+                            : "border border-slate-200 hover:border-slate-300 hover:shadow-xs"
+                        }`}
+                      >
+                        {thumbUrl ? (
+                          <img src={thumbUrl} alt={`Page ${pNum}`} className="w-full h-full object-contain pointer-events-none" />
+                        ) : (
+                          <div className="flex flex-col items-center justify-center text-slate-400 gap-1 text-[10px]">
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500" />
+                          </div>
+                        )}
+                      </div>
+                      <span className={`text-xs font-semibold ${isActive ? "text-blue-600 font-bold" : "text-slate-500"}`}>
+                        {pNum}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Re-open sidebar button if closed */}
-        {!showThumbnailsSidebar && totalPages > 0 && (
-          <button
-            type="button"
-            onClick={() => setShowThumbnailsSidebar(true)}
-            className="p-2.5 bg-white border border-slate-200 rounded-2xl shadow-xs text-slate-600 hover:text-blue-600 hover:bg-slate-50 sticky top-20 cursor-pointer transition-all"
-            title="Show Pages Sidebar"
-          >
-            <PanelLeftOpen className="w-4 h-4" />
-          </button>
-        )}
-
-        {/* Main Document Canvas Container */}
-        <div className="flex-1 min-w-0 flex flex-col items-center">
+          {/* COLUMN 2: CENTER DOCUMENT CANVAS DESK (Continuous Multi-Page Flow) */}
           <div
             ref={containerRef}
-            onClick={handleCanvasClick}
+            onScroll={handleDeskScroll}
             onDragOver={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -2698,794 +3267,1135 @@ export function EditConfig({ files, onProcess, slug }: EditConfigProps) {
               setIsDragOverCanvas(false);
               handleImageDropOnCanvas(e);
             }}
-            className={`relative w-full border transition-all duration-200 rounded-2xl overflow-auto min-h-[680px] max-h-[82vh] flex justify-center items-start py-8 sm:py-12 px-4 sm:px-8 ${
-              isDragOverCanvas
-                ? "border-blue-500 bg-blue-50/40 ring-4 ring-blue-500/10"
-                : "border-slate-200/90 bg-[#F1F5F9] shadow-xs"
-            } [background-image:radial-gradient(#CBD5E1_1.2px,transparent_1.2px)] [background-size:24px_24px]`}
+            className={`flex-1 min-w-0 w-full h-full overflow-y-auto overflow-x-auto flex flex-col items-center justify-start py-8 px-4 sm:px-8 relative bg-slate-100/70 transition-colors ${
+              isDragOverCanvas ? "bg-blue-50/50" : ""
+            }`}
           >
             {!isPdfJsLoaded || !pdfDoc ? (
-              <div className="flex flex-col items-center justify-center py-32 text-slate-500 gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-white border border-slate-200 shadow-xs flex items-center justify-center">
-                  <Loader2 className="w-6 h-6 text-[#E5322D] animate-spin" />
-                </div>
-                <p className="font-semibold text-sm text-slate-700">Loading document into workspace...</p>
-                <p className="text-xs text-slate-400">Rendering vector text, embedded graphics and layout</p>
+              <div className="flex flex-col items-center justify-center p-20 text-gray-500 gap-3 my-auto">
+                <Loader2 className="w-8 h-8 text-[#E5322D] animate-spin" />
+                <p className="font-semibold text-sm">Loading PDF into editor...</p>
               </div>
             ) : (
-              <div className="relative bg-white shadow-[0_22px_70px_4px_rgba(15,23,42,0.18),0_0_0_1px_rgba(15,23,42,0.08)] rounded-[2px] overflow-hidden select-none transition-shadow">
-            {/* 1. Base PDF Rendered Canvas */}
-            <canvas ref={pdfCanvasRef} className="block" />
+              <div className="flex flex-col items-center w-full">
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(pNum => {
+                  const baseDim = pageDimensions[pNum] || { width: 595, height: 842 };
+                  const pWidth = Math.round(baseDim.width * zoom);
+                  const pHeight = Math.round(baseDim.height * zoom);
+                  const isPageActive = currentPage === pNum;
 
-            {/* 2. Whiteout Overlays */}
-            {whiteouts
-              .filter(wo => wo.page === currentPage)
-              .map(wo => {
-                const isActive = activeWhiteoutId === wo.id;
-                return (
-                  <div
-                    key={wo.id}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setActiveWhiteoutId(wo.id);
-                    }}
-                    onMouseDown={(e) => {
-                      if (activeTool === "select") {
-                        e.stopPropagation();
-                        setDraggingItemId({ type: "whiteout", id: wo.id });
-                        const canvas = pdfCanvasRef.current;
-                        if (canvas) {
-                          const rect = canvas.getBoundingClientRect();
-                          setDragOffset({ x: e.clientX - rect.left - wo.x, y: e.clientY - rect.top - wo.y });
-                        }
-                      }
-                    }}
-                    style={{
-                      left: `${wo.x}px`,
-                      top: `${wo.y}px`,
-                      width: `${wo.width}px`,
-                      height: `${wo.height}px`,
-                      backgroundColor: wo.color || "#ffffff",
-                    }}
-                    className={`absolute z-15 group transition-shadow ${
-                      isActive ? "ring-2 ring-blue-500 shadow-md cursor-move" : "cursor-pointer"
-                    }`}
-                  >
-                    {isActive && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            takeSnapshot();
-                            setWhiteouts(prev => prev.filter(w => w.id !== wo.id));
-                            setActiveWhiteoutId(null);
-                          }}
-                          className="absolute -top-2 -right-2 w-4 h-4 bg-red-600 text-white rounded-full text-xs flex items-center justify-center cursor-pointer shadow z-20"
-                        >
-                          ×
-                        </button>
-                        <div
-                          onMouseDown={(e) => {
-                            e.stopPropagation();
-                            setResizingItemId({ type: "whiteout", id: wo.id });
-                            setResizeInitial({ startX: e.clientX, startY: e.clientY, initialW: wo.width, initialH: wo.height });
-                          }}
-                          className="absolute -bottom-2 -right-2 w-4 h-4 bg-blue-600 rounded-full border-2 border-white cursor-nwse-resize z-20 shadow"
-                        />
-                      </>
-                    )}
-                  </div>
-                );
-              })}
-
-            {/* Current Dragging Box (Shape or Whiteout in progress) */}
-            {currentDragRect && (
-              <div
-                style={{
-                  left: `${currentDragRect.x}px`,
-                  top: `${currentDragRect.y}px`,
-                  width: `${currentDragRect.width}px`,
-                  height: `${currentDragRect.height}px`,
-                }}
-                className={`absolute pointer-events-none z-30 ${
-                  activeTool === "whiteout"
-                    ? "bg-white/90 border-2 border-dashed border-red-500"
-                    : "border-2 border-dashed border-blue-500 bg-blue-500/20"
-                }`}
-              />
-            )}
-
-            {/* 3. Shape Annotations */}
-            {shapes
-              .filter(s => s.page === currentPage)
-              .map(shp => {
-                const isActive = activeShapeId === shp.id;
-                return (
-                  <div
-                    key={shp.id}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setActiveShapeId(shp.id);
-                    }}
-                    onMouseDown={(e) => {
-                      if (activeTool === "select") {
-                        e.stopPropagation();
-                        setDraggingItemId({ type: "shape", id: shp.id });
-                        const canvas = pdfCanvasRef.current;
-                        if (canvas) {
-                          const rect = canvas.getBoundingClientRect();
-                          setDragOffset({ x: e.clientX - rect.left - shp.x, y: e.clientY - rect.top - shp.y });
-                        }
-                      }
-                    }}
-                    style={{
-                      left: `${shp.x}px`,
-                      top: `${shp.y}px`,
-                      width: `${shp.width}px`,
-                      height: `${shp.height}px`,
-                    }}
-                    className={`absolute z-20 group transition-shadow ${
-                      isActive ? "ring-2 ring-blue-500 shadow-md cursor-move" : "cursor-pointer"
-                    }`}
-                  >
-                    {shp.type === "rectangle" && (
-                      <div
-                        style={{
-                          width: "100%",
-                          height: "100%",
-                          borderColor: shp.strokeColor,
-                          borderWidth: `${shp.strokeWidth}px`,
-                          backgroundColor: shp.fillColor === "transparent" ? "transparent" : shp.fillColor,
-                          opacity: shp.opacity,
-                        }}
-                        className="border rounded-sm"
-                      />
-                    )}
-                    {shp.type === "circle" && (
-                      <div
-                        style={{
-                          width: "100%",
-                          height: "100%",
-                          borderColor: shp.strokeColor,
-                          borderWidth: `${shp.strokeWidth}px`,
-                          backgroundColor: shp.fillColor === "transparent" ? "transparent" : shp.fillColor,
-                          opacity: shp.opacity,
-                        }}
-                        className="border rounded-full"
-                      />
-                    )}
-                    {(shp.type === "line" || shp.type === "arrow") && (
-                      <svg className="w-full h-full overflow-visible">
-                        <line
-                          x1="0"
-                          y1={shp.height}
-                          x2={shp.width}
-                          y2="0"
-                          stroke={shp.strokeColor}
-                          strokeWidth={shp.strokeWidth}
-                        />
-                      </svg>
-                    )}
-
-                    {isActive && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            takeSnapshot();
-                            setShapes(prev => prev.filter(s => s.id !== shp.id));
-                            setActiveShapeId(null);
-                          }}
-                          className="absolute -top-2 -right-2 w-4 h-4 bg-red-600 text-white rounded-full text-xs flex items-center justify-center cursor-pointer shadow z-30"
-                        >
-                          ×
-                        </button>
-                        <div
-                          onMouseDown={(e) => {
-                            e.stopPropagation();
-                            setResizingItemId({ type: "shape", id: shp.id });
-                            setResizeInitial({ startX: e.clientX, startY: e.clientY, initialW: shp.width, initialH: shp.height });
-                          }}
-                          className="absolute -bottom-2 -right-2 w-4 h-4 bg-blue-600 rounded-full border-2 border-white cursor-nwse-resize z-30 shadow"
-                        />
-                      </>
-                    )}
-                  </div>
-                );
-              })}
-
-            {/* 4. Freehand Drawing Canvas Overlay */}
-            <canvas
-              ref={drawCanvasRef}
-              onMouseDown={handleMouseDown}
-              onMouseMove={handleMouseMove}
-              onMouseUp={handleMouseUp}
-              onMouseLeave={handleMouseUp}
-              className={`absolute inset-0 ${
-                activeTool === "draw" || activeTool === "highlight" || activeTool === "whiteout" || activeTool === "shape"
-                  ? "cursor-crosshair z-25 pointer-events-auto"
-                  : "pointer-events-none z-10"
-              }`}
-            />
-
-            {/* 5. Image & Signature Annotations */}
-            {images
-              .filter(img => img.page === currentPage)
-              .map(img => {
-                const isActive = activeImageId === img.id;
-                return (
-                  <div
-                    key={img.id}
-                    style={{
-                      left: `${img.x}px`,
-                      top: `${img.y}px`,
-                      width: `${img.width}px`,
-                      height: `${img.height}px`,
-                    }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setActiveImageId(img.id);
-                    }}
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setActiveImageId(img.id);
-                      setDraggingItemId({ type: "image", id: img.id });
-                      const canvas = pdfCanvasRef.current;
-                      if (canvas) {
-                        const rect = canvas.getBoundingClientRect();
-                        setDragOffset({ x: e.clientX - rect.left - img.x, y: e.clientY - rect.top - img.y });
-                      }
-                    }}
-                    className={`absolute z-30 select-none group transition-shadow ${
-                      isActive ? "ring-2 ring-blue-500 shadow-xl cursor-grab" : "hover:ring-2 hover:ring-blue-300 cursor-pointer"
-                    }`}
-                  >
-                    <img
-                      src={img.dataUrl}
-                      alt="Annotation"
-                      draggable={false}
-                      className="w-full h-full object-contain pointer-events-none"
-                    />
-
-                    {isActive && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            takeSnapshot();
-                            setImages(prev => prev.filter(i => i.id !== img.id));
-                            setActiveImageId(null);
-                          }}
-                          className="absolute -top-2.5 -right-2.5 w-5 h-5 bg-red-600 hover:bg-red-700 text-white rounded-full text-xs flex items-center justify-center cursor-pointer shadow z-40"
-                          title="Delete"
-                        >
-                          ×
-                        </button>
-                        <div
-                          onMouseDown={(e) => {
-                            e.stopPropagation();
-                            setResizingItemId({ type: "image", id: img.id });
-                            setResizeInitial({ startX: e.clientX, startY: e.clientY, initialW: img.width, initialH: img.height });
-                          }}
-                          className="absolute -bottom-2.5 -right-2.5 w-5 h-5 bg-blue-600 rounded-full border-2 border-white cursor-nwse-resize shadow z-40"
-                          title="Drag to resize"
-                        />
-                      </>
-                    )}
-                  </div>
-                );
-              })}
-
-            {/* 5b. PDF Embedded Images (Photos, Logos, Stamps extracted from document) */}
-            {embeddedImages
-              .filter(emb => emb.page === currentPage)
-              .map(emb => {
-                const isActive = activeEmbeddedImgId === emb.id;
-
-                if (emb.isDeleted) {
-                  // Whiteout original deleted image area
                   return (
                     <div
-                      key={emb.id}
-                      style={{
-                        left: `${emb.x}px`,
-                        top: `${emb.y}px`,
-                        width: `${emb.width}px`,
-                        height: `${emb.height}px`,
-                        backgroundColor: "#ffffff",
+                      key={pNum}
+                      id={`pdf-page-${pNum}`}
+                      data-page={pNum}
+                      onClick={(e) => {
+                        if (currentPage !== pNum) setCurrentPage(pNum);
+                        handleCanvasClick(e, pNum);
                       }}
-                      className="absolute z-22 border border-dashed border-gray-300 pointer-events-none"
-                    />
-                  );
-                }
-
-                return (
-                  <div
-                    key={emb.id}
-                    style={{
-                      left: `${emb.x}px`,
-                      top: `${emb.y}px`,
-                      width: `${emb.width}px`,
-                      height: `${emb.height}px`,
-                      zIndex: isActive ? 40 : 12,
-                    }}
-                    onClick={(e) => {
-                      if (activeTool !== "select") return;
-                      e.stopPropagation();
-                      setActiveEmbeddedImgId(emb.id);
-                      setActiveTextId(null);
-                      setActiveImageId(null);
-                    }}
-                    onMouseDown={(e) => {
-                      if (activeTool === "select") {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setActiveEmbeddedImgId(emb.id);
-                        setDraggingItemId({ type: "embedded-image", id: emb.id });
-                        const canvas = pdfCanvasRef.current;
-                        if (canvas) {
-                          const rect = canvas.getBoundingClientRect();
-                          setDragOffset({ x: e.clientX - rect.left - emb.x, y: e.clientY - rect.top - emb.y });
-                        }
-                      }
-                    }}
-                    className={`absolute select-none group transition-all ${
-                      isActive
-                        ? "ring-2 ring-blue-600 shadow-xl cursor-grab bg-white/10"
-                        : activeTool === "select"
-                        ? "hover:ring-2 hover:ring-blue-400 hover:bg-blue-400/15 cursor-pointer rounded-sm"
-                        : "pointer-events-none"
-                    }`}
-                  >
-                    {/* If replaced with a new photo, show the new photo over the canvas */}
-                    {emb.replacementDataUrl && (
-                      <img
-                        src={emb.replacementDataUrl}
-                        alt="Replaced PDF Image"
-                        draggable={false}
-                        className="w-full h-full object-contain pointer-events-none bg-white"
-                      />
-                    )}
-
-                    {/* Badge tag on hover - only in select tool */}
-                    {activeTool === "select" && (
-                      <span className="absolute top-1 left-1 bg-black/70 text-white text-[9px] font-bold px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                        {emb.replacementDataUrl ? "Replaced Image" : "PDF Image"}
-                      </span>
-                    )}
-
-                    {/* Mini Floating Action Toolbar when clicked/active */}
-                    {isActive && (
-                      <div
+                      style={{
+                        width: `${pWidth}px`,
+                        height: `${pHeight}px`,
+                      }}
+                      className={`relative bg-white shadow-[0_4px_24px_rgba(0,0,0,0.12)] border rounded-[2px] overflow-hidden select-none mb-8 shrink-0 transition-shadow ${
+                        isPageActive ? "border-slate-300 ring-1 ring-blue-500/20" : "border-slate-200/80"
+                      }`}
+                    >
+                      {/* 1. Base PDF Rendered Canvas */}
+                      <canvas
+                        ref={el => {
+                          pageCanvasRefs.current[pNum] = el;
+                          if (pNum === 1) (pdfCanvasRef as any).current = el;
+                        }}
                         style={{
-                          position: "absolute",
-                          bottom: "calc(100% + 6px)",
-                          left: 0,
-                          zIndex: 100,
+                          width: `${pWidth}px`,
+                          height: `${pHeight}px`,
+                          imageRendering: "-webkit-optimize-contrast",
                         }}
-                        onClick={(e) => e.stopPropagation()}
-                        className="bg-white border border-gray-300 shadow-xl rounded-xl px-2 py-1 flex items-center gap-1.5 text-xs text-gray-800 whitespace-nowrap animate-in fade-in duration-100"
-                      >
-                        {/* Replace Image button */}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setReplacingImgId(emb.id);
-                            replaceImgInputRef.current?.click();
-                          }}
-                          className="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold rounded-lg flex items-center gap-1 cursor-pointer transition-colors"
-                          title="Replace this image with a new photo/logo"
-                        >
-                          <RefreshCw className="w-3.5 h-3.5" />
-                          <span>Replace</span>
-                        </button>
-
-                        {/* Delete Image button */}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            takeSnapshot();
-                            setEmbeddedImages(prev => prev.map(i => i.id === emb.id ? { ...i, isDeleted: true } : i));
-                            setActiveEmbeddedImgId(null);
-                          }}
-                          className="px-2 py-1 hover:bg-red-50 text-red-600 font-semibold rounded-lg flex items-center gap-1 cursor-pointer transition-colors"
-                          title="Delete / Erase this image"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                          <span>Delete</span>
-                        </button>
-
-                        {/* Done button */}
-                        <button
-                          type="button"
-                          onClick={() => setActiveEmbeddedImgId(null)}
-                          className="p-1 hover:bg-gray-100 rounded text-gray-500 cursor-pointer"
-                          title="Deselect"
-                        >
-                          <Check className="w-3.5 h-3.5 text-green-600" />
-                        </button>
-                      </div>
-                    )}
-
-                    {/* Resize handle when active */}
-                    {isActive && (
-                      <div
-                        onMouseDown={(e) => {
-                          e.stopPropagation();
-                          setResizingItemId({ type: "embedded-image", id: emb.id });
-                          setResizeInitial({ startX: e.clientX, startY: e.clientY, initialW: emb.width, initialH: emb.height });
-                        }}
-                        className="absolute -bottom-2 -right-2 w-4 h-4 bg-blue-600 rounded-full border-2 border-white cursor-nwse-resize z-30 shadow"
-                        title="Drag to resize"
+                        className="block shrink-0 pointer-events-none"
                       />
-                    )}
-                  </div>
-                );
-              })}
 
-            {/* ========================================================================= */}
-            {/* 6. INLINE TEXT EDITING: Pixel-Perfect In-Place Document Editing            */}
-            {/* ========================================================================= */}
-            {textList
-              .filter(t => t.page === currentPage)
-              .map(item => {
-                const isSelected = activeTextId === item.id;
-                const isModified = item.isOriginal && (
-                  item.whiteoutOriginal ||
-                  item.currentText !== item.originalText
-                );
+                      {/* 2. Whiteout Overlays */}
+                      {whiteouts
+                        .filter(wo => wo.page === pNum)
+                        .map(wo => {
+                          const isActive = activeWhiteoutId === wo.id;
+                          return (
+                            <div
+                              key={wo.id}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveWhiteoutId(wo.id);
+                              }}
+                              onMouseDown={(e) => {
+                                if (activeTool === "select") {
+                                  e.stopPropagation();
+                                  setDraggingItemId({ type: "whiteout", id: wo.id });
+                                  const canvas = pageCanvasRefs.current[pNum];
+                                  if (canvas) {
+                                    const rect = canvas.getBoundingClientRect();
+                                    setDragOffset({
+                                      x: ((e.clientX - rect.left) / zoom) - wo.x,
+                                      y: ((e.clientY - rect.top) / zoom) - wo.y,
+                                    });
+                                  }
+                                }
+                              }}
+                              style={{
+                                left: `${wo.x * zoom}px`,
+                                top: `${wo.y * zoom}px`,
+                                width: `${wo.width * zoom}px`,
+                                height: `${wo.height * zoom}px`,
+                                backgroundColor: wo.color || "#ffffff",
+                              }}
+                              className={`absolute z-15 group transition-shadow ${
+                                isActive ? "ring-2 ring-blue-500 shadow-md cursor-move" : "cursor-pointer"
+                              }`}
+                            >
+                              {isActive && (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      takeSnapshot();
+                                      setWhiteouts(prev => prev.filter(w => w.id !== wo.id));
+                                      setActiveWhiteoutId(null);
+                                    }}
+                                    className="absolute -top-2 -right-2 w-4 h-4 bg-red-600 text-white rounded-full text-xs flex items-center justify-center cursor-pointer shadow z-20"
+                                  >
+                                    ×
+                                  </button>
+                                  <div
+                                    onMouseDown={(e) => {
+                                      e.stopPropagation();
+                                      setResizingItemId({ type: "whiteout", id: wo.id });
+                                      setResizeInitial({ startX: e.clientX, startY: e.clientY, initialW: wo.width, initialH: wo.height });
+                                    }}
+                                    className="absolute -bottom-2 -right-2 w-4 h-4 bg-blue-600 rounded-full border-2 border-white cursor-nwse-resize z-20 shadow"
+                                  />
+                                </>
+                              )}
+                            </div>
+                          );
+                        })}
 
-                const itemWidthPx = Math.max(item.width, 24);
-                const itemHeightPx = Math.max(item.height, 13);
-
-                // Determine width: Box NEVER arbitrarily expands across the page!
-                // It stays at exact original line width unless user explicitly typed extra characters.
-                const origLen = (item.originalText || "").trim().length;
-                const currLen = (item.currentText || "").trim().length;
-                const charRatio = origLen > 0 ? (currLen / origLen) : 1;
-
-                const canvasW = canvasWidth || 1000;
-                const maxAllowedW = Math.max(itemWidthPx, canvasW - item.x - 15);
-
-                const boxWidthPx = isSelected
-                  ? Math.min(Math.max(itemWidthPx + 16, 60), maxAllowedW)
-                  : (isModified && charRatio > 1.05)
-                  ? Math.min(Math.round(itemWidthPx * charRatio), maxAllowedW)
-                  : itemWidthPx;
-
-                return (
-                  <div
-                    key={item.id}
-                    style={{
-                      left: `${item.x}px`,
-                      top: `${item.y}px`,
-                      width: `${boxWidthPx}px`,
-                      height: `${itemHeightPx}px`,
-                      zIndex: isSelected ? 50 : isModified ? 35 : 25,
-                    }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setActiveTextId(item.id);
-                      if (item.isScrambled || isScrambledText(item.currentText) || isScrambledText(item.originalText)) {
-                        handleAutoFixText(item);
-                      }
-                    }}
-                    className={`absolute ${
-                      isSelected
-                        ? "z-50 ring-2 ring-blue-600 ring-offset-0 rounded-[2px] shadow-sm"
-                        : activeTool === "edit-text"
-                        ? "hover:ring-1 hover:ring-blue-500/50 hover:bg-blue-500/[0.04] cursor-text rounded-[2px] transition-all"
-                        : "cursor-pointer rounded-[1px]"
-                    }`}
-                  >
-                    {isSelected ? (
-                      /* ACTIVE INLINE EDITING */
-                      <div className="relative w-full h-full">
-                        {/* Corner edit handles for professional look */}
-                        <div className="absolute -top-1 -left-1 w-2 h-2 bg-blue-600 border border-white rounded-[1px] pointer-events-none z-60" />
-                        <div className="absolute -top-1 -right-1 w-2 h-2 bg-blue-600 border border-white rounded-[1px] pointer-events-none z-60" />
-                        <div className="absolute -bottom-1 -left-1 w-2 h-2 bg-blue-600 border border-white rounded-[1px] pointer-events-none z-60" />
-                        <div className="absolute -bottom-1 -right-1 w-2 h-2 bg-blue-600 border border-white rounded-[1px] pointer-events-none z-60" />
-
-                        {/* Professional Floating Toolbar positioned directly above the text line */}
+                      {/* Current Dragging Box (Shape or Whiteout in progress) */}
+                      {currentPage === pNum && currentDragRect && (
                         <div
                           style={{
-                            position: "absolute",
-                            bottom: "calc(100% + 8px)",
-                            left: "50%",
-                            transform: "translateX(-50%)",
-                            zIndex: 100,
+                            left: `${currentDragRect.x * zoom}px`,
+                            top: `${currentDragRect.y * zoom}px`,
+                            width: `${currentDragRect.width * zoom}px`,
+                            height: `${currentDragRect.height * zoom}px`,
                           }}
-                          onClick={(e) => e.stopPropagation()}
-                          className="bg-white/95 backdrop-blur-md border border-gray-200/90 shadow-2xl rounded-2xl px-3 py-1.5 flex items-center gap-2 text-xs text-gray-800 animate-in fade-in zoom-in-95 duration-150 select-none whitespace-nowrap"
-                        >
-                          {/* Font Family selector */}
-                          <select
-                            value={item.fontFamily}
-                            onChange={(e) => {
-                              const val = e.target.value as any;
-                              takeSnapshot();
-                              setTextList(prev => prev.map(t => t.id === item.id ? { ...t, fontFamily: val } : t));
-                            }}
-                            className="bg-gray-100 hover:bg-gray-200/70 border border-gray-200 text-xs font-semibold rounded-lg px-2 py-1 outline-none cursor-pointer text-gray-700 transition-colors"
-                          >
-                            <option value="Helvetica">Arial / Helvetica</option>
-                            <option value="TimesRoman">Times New Roman</option>
-                            <option value="Courier">Courier New</option>
-                          </select>
+                          className={`absolute pointer-events-none z-30 ${
+                            activeTool === "whiteout"
+                              ? "bg-white/90 border-2 border-dashed border-red-500"
+                              : "border-2 border-dashed border-blue-500 bg-blue-500/20"
+                          }`}
+                        />
+                      )}
 
-                          {/* Font Size Stepper */}
-                          <div className="flex items-center gap-1 bg-gray-100 border border-gray-200 px-1.5 py-0.5 rounded-lg">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                takeSnapshot();
-                                setTextList(prev => prev.map(t => t.id === item.id ? { ...t, fontSize: Math.max(6, Math.round(t.fontSize) - 1) } : t));
+                      {/* 3. Shape Annotations */}
+                      {shapes
+                        .filter(s => s.page === pNum)
+                        .map(shp => {
+                          const isActive = activeShapeId === shp.id;
+                          return (
+                            <div
+                              key={shp.id}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveShapeId(shp.id);
                               }}
-                              className="w-5 h-5 hover:bg-white hover:shadow-xs rounded-md font-bold text-xs flex items-center justify-center cursor-pointer text-gray-600 transition-all"
-                              title="Smaller"
-                            >
-                              -
-                            </button>
-                            <span className="text-xs font-bold text-gray-800 min-w-[1.4rem] text-center">{Math.round(item.fontSize)}</span>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                takeSnapshot();
-                                setTextList(prev => prev.map(t => t.id === item.id ? { ...t, fontSize: Math.min(96, Math.round(t.fontSize) + 1) } : t));
+                              onMouseDown={(e) => {
+                                if (activeTool === "select") {
+                                  e.stopPropagation();
+                                  setDraggingItemId({ type: "shape", id: shp.id });
+                                  const canvas = pageCanvasRefs.current[pNum];
+                                  if (canvas) {
+                                    const rect = canvas.getBoundingClientRect();
+                                    setDragOffset({
+                                      x: ((e.clientX - rect.left) / zoom) - shp.x,
+                                      y: ((e.clientY - rect.top) / zoom) - shp.y,
+                                    });
+                                  }
+                                }
                               }}
-                              className="w-5 h-5 hover:bg-white hover:shadow-xs rounded-md font-bold text-xs flex items-center justify-center cursor-pointer text-gray-600 transition-all"
-                              title="Larger"
-                            >
-                              +
-                            </button>
-                          </div>
-
-                          {/* Bold & Italic */}
-                          <div className="flex items-center gap-0.5 bg-gray-100 border border-gray-200 p-0.5 rounded-lg">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                takeSnapshot();
-                                setTextList(prev => prev.map(t => t.id === item.id ? { ...t, isBold: !t.isBold } : t));
+                              style={{
+                                left: `${shp.x * zoom}px`,
+                                top: `${shp.y * zoom}px`,
+                                width: `${shp.width * zoom}px`,
+                                height: `${shp.height * zoom}px`,
                               }}
-                              className={`w-6 h-6 rounded-md font-bold text-xs cursor-pointer flex items-center justify-center transition-all ${
-                                item.isBold ? "bg-blue-600 text-white shadow-xs" : "hover:bg-white text-gray-700"
+                              className={`absolute z-20 group transition-shadow ${
+                                isActive ? "ring-2 ring-blue-500 shadow-md cursor-move" : "cursor-pointer"
                               }`}
-                              title="Bold"
                             >
-                              B
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                takeSnapshot();
-                                setTextList(prev => prev.map(t => t.id === item.id ? { ...t, isItalic: !t.isItalic } : t));
-                              }}
-                              className={`w-6 h-6 rounded-md font-bold text-xs italic cursor-pointer flex items-center justify-center transition-all ${
-                                item.isItalic ? "bg-blue-600 text-white shadow-xs" : "hover:bg-white text-gray-700"
-                              }`}
-                              title="Italic"
-                            >
-                              I
-                            </button>
-                          </div>
+                              {shp.type === "rectangle" && (
+                                <div
+                                  style={{
+                                    width: "100%",
+                                    height: "100%",
+                                    borderColor: shp.strokeColor,
+                                    borderWidth: `${Math.max(1, shp.strokeWidth * zoom)}px`,
+                                    backgroundColor: shp.fillColor === "transparent" ? "transparent" : shp.fillColor,
+                                    opacity: shp.opacity,
+                                  }}
+                                  className="border rounded-sm"
+                                />
+                              )}
+                              {shp.type === "circle" && (
+                                <div
+                                  style={{
+                                    width: "100%",
+                                    height: "100%",
+                                    borderColor: shp.strokeColor,
+                                    borderWidth: `${Math.max(1, shp.strokeWidth * zoom)}px`,
+                                    backgroundColor: shp.fillColor === "transparent" ? "transparent" : shp.fillColor,
+                                    opacity: shp.opacity,
+                                  }}
+                                  className="border rounded-full"
+                                />
+                              )}
+                              {(shp.type === "line" || shp.type === "arrow") && (
+                                <svg className="w-full h-full overflow-visible">
+                                  <line
+                                    x1="0"
+                                    y1={shp.height * zoom}
+                                    x2={shp.width * zoom}
+                                    y2="0"
+                                    stroke={shp.strokeColor}
+                                    strokeWidth={Math.max(1, shp.strokeWidth * zoom)}
+                                  />
+                                </svg>
+                              )}
 
-                          {/* Color Palette */}
-                          <div className="flex items-center gap-1.5 border-l border-gray-200 pl-2" title="Text Color">
-                            {[
-                              { name: "Black", value: "#000000" },
-                              { name: "White", value: "#ffffff" },
-                              { name: "Blue", value: "#2563EB" },
-                              { name: "Red", value: "#E5322D" },
-                            ].map(c => (
-                              <button
-                                key={c.value}
-                                type="button"
-                                onClick={() => {
-                                  takeSnapshot();
-                                  setTextList(prev => prev.map(t => t.id === item.id ? { ...t, color: c.value } : t));
+                              {isActive && (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      takeSnapshot();
+                                      setShapes(prev => prev.filter(s => s.id !== shp.id));
+                                      setActiveShapeId(null);
+                                    }}
+                                    className="absolute -top-2 -right-2 w-4 h-4 bg-red-600 text-white rounded-full text-xs flex items-center justify-center cursor-pointer shadow z-30"
+                                  >
+                                    ×
+                                  </button>
+                                  <div
+                                    onMouseDown={(e) => {
+                                      e.stopPropagation();
+                                      setResizingItemId({ type: "shape", id: shp.id });
+                                      setResizeInitial({ startX: e.clientX, startY: e.clientY, initialW: shp.width, initialH: shp.height });
+                                    }}
+                                    className="absolute -bottom-2 -right-2 w-4 h-4 bg-blue-600 rounded-full border-2 border-white cursor-nwse-resize z-30 shadow"
+                                  />
+                                </>
+                              )}
+                            </div>
+                          );
+                        })}
+
+                      {/* 4. Freehand Drawing Canvas Overlay */}
+                      <canvas
+                        ref={el => {
+                          drawCanvasRefs.current[pNum] = el;
+                          if (pNum === 1) (drawCanvasRef as any).current = el;
+                        }}
+                        style={{
+                          width: `${pWidth}px`,
+                          height: `${pHeight}px`,
+                        }}
+                        onMouseDown={(e) => handleMouseDown(e, pNum)}
+                        onMouseMove={(e) => handleMouseMove(e, pNum)}
+                        onMouseUp={() => handleMouseUp(pNum)}
+                        onMouseLeave={() => handleMouseUp(pNum)}
+                        className={`absolute inset-0 ${
+                          activeTool === "draw" || activeTool === "highlight" || activeTool === "whiteout" || activeTool === "shape"
+                            ? "cursor-crosshair z-25 pointer-events-auto"
+                            : "pointer-events-none z-10"
+                        }`}
+                      />
+
+                      {/* 5. Image & Signature Annotations */}
+                      {images
+                        .filter(img => img.page === pNum)
+                        .map(img => {
+                          const isActive = activeImageId === img.id;
+                          return (
+                            <div
+                              key={img.id}
+                              style={{
+                                left: `${img.x * zoom}px`,
+                                top: `${img.y * zoom}px`,
+                                width: `${img.width * zoom}px`,
+                                height: `${img.height * zoom}px`,
+                              }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveImageId(img.id);
+                              }}
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setActiveImageId(img.id);
+                                setDraggingItemId({ type: "image", id: img.id });
+                                const canvas = pageCanvasRefs.current[pNum];
+                                if (canvas) {
+                                  const rect = canvas.getBoundingClientRect();
+                                  setDragOffset({
+                                    x: ((e.clientX - rect.left) / zoom) - img.x,
+                                    y: ((e.clientY - rect.top) / zoom) - img.y,
+                                  });
+                                }
+                              }}
+                              className={`absolute z-30 select-none group transition-shadow ${
+                                isActive ? "ring-2 ring-blue-500 shadow-xl cursor-grab" : "hover:ring-2 hover:ring-blue-300 cursor-pointer"
+                              }`}
+                            >
+                              <img
+                                src={img.dataUrl}
+                                alt="Annotation"
+                                draggable={false}
+                                className="w-full h-full object-contain pointer-events-none"
+                              />
+
+                              {isActive && (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      takeSnapshot();
+                                      setImages(prev => prev.filter(i => i.id !== img.id));
+                                      setActiveImageId(null);
+                                    }}
+                                    className="absolute -top-2.5 -right-2.5 w-5 h-5 bg-red-600 hover:bg-red-700 text-white rounded-full text-xs flex items-center justify-center cursor-pointer shadow z-40"
+                                    title="Delete"
+                                  >
+                                    ×
+                                  </button>
+                                  <div
+                                    onMouseDown={(e) => {
+                                      e.stopPropagation();
+                                      setResizingItemId({ type: "image", id: img.id });
+                                      setResizeInitial({ startX: e.clientX, startY: e.clientY, initialW: img.width, initialH: img.height });
+                                    }}
+                                    className="absolute -bottom-2.5 -right-2.5 w-5 h-5 bg-blue-600 rounded-full border-2 border-white cursor-nwse-resize shadow z-40"
+                                    title="Drag to resize"
+                                  />
+                                </>
+                              )}
+                            </div>
+                          );
+                        })}
+
+                      {/* 5b. PDF Embedded Images */}
+                      {embeddedImages
+                        .filter(emb => emb.page === pNum)
+                        .map(emb => {
+                          const isActive = activeEmbeddedImgId === emb.id;
+
+                          if (emb.isDeleted) {
+                            return (
+                              <div
+                                key={emb.id}
+                                style={{
+                                  left: `${emb.x * zoom}px`,
+                                  top: `${emb.y * zoom}px`,
+                                  width: `${emb.width * zoom}px`,
+                                  height: `${emb.height * zoom}px`,
+                                  backgroundColor: "#ffffff",
                                 }}
-                                className={`w-4 h-4 rounded-full border border-gray-300 cursor-pointer transition-transform ${
-                                  item.color.toLowerCase() === c.value.toLowerCase() ? "ring-2 ring-blue-500 scale-125 shadow-xs" : "hover:scale-110"
+                                className="absolute z-22 border border-dashed border-gray-300 pointer-events-none"
+                              />
+                            );
+                          }
+
+                          return (
+                            <div
+                              key={emb.id}
+                              style={{
+                                left: `${emb.x * zoom}px`,
+                                top: `${emb.y * zoom}px`,
+                                width: `${emb.width * zoom}px`,
+                                height: `${emb.height * zoom}px`,
+                                zIndex: isActive ? 40 : 12,
+                              }}
+                              onClick={(e) => {
+                                if (activeTool !== "select") return;
+                                e.stopPropagation();
+                                setActiveEmbeddedImgId(emb.id);
+                                setActiveTextId(null);
+                                setActiveImageId(null);
+                              }}
+                              onMouseDown={(e) => {
+                                if (activeTool === "select") {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setActiveEmbeddedImgId(emb.id);
+                                  setDraggingItemId({ type: "embedded-image", id: emb.id });
+                                  const canvas = pageCanvasRefs.current[pNum];
+                                  if (canvas) {
+                                    const rect = canvas.getBoundingClientRect();
+                                    setDragOffset({
+                                      x: ((e.clientX - rect.left) / zoom) - emb.x,
+                                      y: ((e.clientY - rect.top) / zoom) - emb.y,
+                                    });
+                                  }
+                                }
+                              }}
+                              className={`absolute select-none group transition-all ${
+                                isActive
+                                  ? "ring-2 ring-blue-600 shadow-xl cursor-grab bg-white/10"
+                                  : activeTool === "select"
+                                  ? "hover:ring-2 hover:ring-blue-400 hover:bg-blue-400/15 cursor-pointer rounded-sm"
+                                  : "pointer-events-none"
+                              }`}
+                            >
+                              {emb.replacementDataUrl && (
+                                <img
+                                  src={emb.replacementDataUrl}
+                                  alt="Replaced PDF Image"
+                                  draggable={false}
+                                  className="w-full h-full object-contain pointer-events-none bg-white"
+                                />
+                              )}
+
+                              {activeTool === "select" && (
+                                <span className="absolute top-1 left-1 bg-black/70 text-white text-[9px] font-bold px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                                  {emb.replacementDataUrl ? "Replaced Image" : "PDF Image"}
+                                </span>
+                              )}
+
+                              {isActive && (
+                                <div
+                                  style={{
+                                    position: "absolute",
+                                    bottom: "calc(100% + 6px)",
+                                    left: 0,
+                                    zIndex: 100,
+                                  }}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="bg-white border border-gray-300 shadow-xl rounded-xl px-2 py-1 flex items-center gap-1.5 text-xs text-gray-800 whitespace-nowrap animate-in fade-in duration-100"
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setReplacingImgId(emb.id);
+                                      replaceImgInputRef.current?.click();
+                                    }}
+                                    className="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold rounded-lg flex items-center gap-1 cursor-pointer transition-colors"
+                                    title="Replace this image with a new photo/logo"
+                                  >
+                                    <RefreshCw className="w-3.5 h-3.5" />
+                                    <span>Replace</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      takeSnapshot();
+                                      setEmbeddedImages(prev => prev.map(i => i.id === emb.id ? { ...i, isDeleted: true } : i));
+                                      setActiveEmbeddedImgId(null);
+                                    }}
+                                    className="px-2 py-1 hover:bg-red-50 text-red-600 font-semibold rounded-lg flex items-center gap-1 cursor-pointer transition-colors"
+                                    title="Delete / Erase this image"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                    <span>Delete</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => setActiveEmbeddedImgId(null)}
+                                    className="p-1 hover:bg-gray-100 rounded text-gray-500 cursor-pointer"
+                                    title="Deselect"
+                                  >
+                                    <Check className="w-3.5 h-3.5 text-green-600" />
+                                  </button>
+                                </div>
+                              )}
+
+                              {isActive && (
+                                <div
+                                  onMouseDown={(e) => {
+                                    e.stopPropagation();
+                                    setResizingItemId({ type: "embedded-image", id: emb.id });
+                                    setResizeInitial({ startX: e.clientX, startY: e.clientY, initialW: emb.width, initialH: emb.height });
+                                  }}
+                                  className="absolute -bottom-2 -right-2 w-4 h-4 bg-blue-600 rounded-full border-2 border-white cursor-nwse-resize z-30 shadow"
+                                  title="Drag to resize"
+                                />
+                              )}
+                            </div>
+                          );
+                        })}
+
+                      {/* 6. Inline Text Items for this page */}
+                      {(() => {
+                        const pageTexts = textList.filter(t => t.page === pNum);
+                        const pageYShifts = calculatePageYShifts(pageTexts);
+
+                        return pageTexts.map(item => {
+                          const isSelected = activeTextId === item.id;
+                          const isTextChanged = item.isOriginal && item.currentText.trim() !== item.originalText.trim();
+                          const isDimensionChanged = item.isOriginal && (
+                            (item.origWidth !== undefined && Math.abs(item.width - item.origWidth) > 3) ||
+                            (item.origHeight !== undefined && Math.abs(item.height - item.origHeight) > 3) ||
+                            (item.origX !== undefined && Math.abs(item.x - item.origX) > 3) ||
+                            (item.origY !== undefined && Math.abs(item.y - item.origY) > 3)
+                          );
+                          const isModified = isTextChanged || isDimensionChanged;
+                          const yShift = pageYShifts.get(item.id) || 0;
+                          const isShiftedOriginal = item.isOriginal && !isModified && yShift > 0;
+
+                          // Lock height strictly to item.height until an extra line is genuinely created
+                          const extraLines = calculateExtraLines(item);
+                          const lineH = item.lineHeight || item.fontSize * 1.25;
+                          const effectiveHeight = extraLines > 0 ? item.height + (extraLines * lineH) : item.height;
+
+                          // 4px horizontal bleed and 3px vertical bleed to completely engulf canvas anti-aliasing edges (ticks and dashes)
+                          const bleedX = (isSelected || isModified || isShiftedOriginal) ? 4 * zoom : 0;
+                          const bleedY = (isSelected || isModified || isShiftedOriginal) ? 3 * zoom : 0;
+
+                          const scaledX = item.x * zoom;
+                          const scaledY = (item.y + yShift) * zoom;
+                          const scaledWidth = item.width * zoom;
+                          const scaledHeight = effectiveHeight * zoom;
+                          const scaledFontSize = Math.max(6, item.fontSize * zoom);
+                          const scaledLineHeight = (item.lineHeight || item.fontSize * 1.25) * zoom;
+
+                          const fontFamilyCss = item.fontFamily === "TimesRoman"
+                            ? '"Times New Roman", Times, Georgia, "Nimbus Roman No9 L", serif'
+                            : item.fontFamily === "Courier"
+                            ? '"Courier New", Courier, monospace'
+                            : 'Arial, "Helvetica Neue", Helvetica, sans-serif';
+
+                          return (
+                            <div key={item.id} className="contents">
+                              {/* 1. Complete Whiteout of the entire original text footprint from the PDF canvas ONLY when selected, modified, or shifted */}
+                              {item.isOriginal && (isSelected || isModified || isShiftedOriginal) && (() => {
+                                const origFx = item.origX !== undefined ? item.origX : item.x;
+                                const origFy = item.origY !== undefined ? item.origY : item.y;
+                                const origFw = item.origWidth !== undefined ? item.origWidth : item.width;
+                                const origFh = item.origHeight !== undefined ? item.origHeight : item.height;
+
+                                return (
+                                  <div
+                                    style={{
+                                      left: `${(origFx * zoom) - (4 * zoom)}px`,
+                                      top: `${(origFy * zoom) - (3 * zoom)}px`,
+                                      width: `${(origFw * zoom) + (8 * zoom)}px`,
+                                      height: `${(origFh * zoom) + (6 * zoom)}px`,
+                                      backgroundColor: item.bgColor || "#ffffff",
+                                    }}
+                                    className="absolute pointer-events-none z-24"
+                                  />
+                                );
+                              })()}
+
+                              <div
+                                style={{
+                                  left: `${scaledX - bleedX}px`,
+                                  top: `${scaledY - bleedY}px`,
+                                  width: `${scaledWidth + (bleedX * 2)}px`,
+                                  height: `${scaledHeight + (bleedY * 2)}px`,
+                                  zIndex: isSelected ? 50 : (isModified || isShiftedOriginal) ? 35 : 25,
+                                }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActiveTextId(item.id);
+                                  if (item.isScrambled || isScrambledText(item.currentText) || isScrambledText(item.originalText)) {
+                                    handleAutoFixText(item);
+                                  }
+                                }}
+                                className={`absolute transition-all ${
+                                  isSelected
+                                    ? "z-50 border-[1.5px] border-blue-600 rounded-[2px] shadow-sm bg-white"
+                                    : activeTool === "edit-text"
+                                    ? "border border-transparent hover:border-dashed hover:border-blue-500/80 hover:bg-blue-500/[0.06] cursor-text rounded-[1px]"
+                                    : "cursor-pointer rounded-[1px]"
                                 }`}
-                                style={{ backgroundColor: c.value }}
-                                title={c.name}
-                              />
-                            ))}
-                            {/* Auto-detected color swatch */}
-                            {item.color && !["#000000", "#ffffff", "#2563eb", "#e5322d"].includes(item.color.toLowerCase()) && (
-                              <button
-                                type="button"
-                                className="w-4 h-4 rounded-full border border-gray-400 cursor-pointer ring-2 ring-blue-500 scale-125 shadow-xs"
-                                style={{ backgroundColor: item.color }}
-                                title={`Original Text Color (${item.color})`}
-                              />
-                            )}
-                          </div>
+                              >
+                                {isSelected ? (
+                                  <div className="relative w-full h-full">
+                                    {/* Corner decorative handles */}
+                                    <div className="absolute -top-1 -left-1 w-2 h-2 bg-white border-[1.5px] border-blue-600 rounded-[1px] pointer-events-none z-60" />
+                                    <div className="absolute -top-1 -right-1 w-2 h-2 bg-white border-[1.5px] border-blue-600 rounded-[1px] pointer-events-none z-60" />
+                                    <div className="absolute -bottom-1 -left-1 w-2 h-2 bg-white border-[1.5px] border-blue-600 rounded-[1px] pointer-events-none z-60" />
 
-                          {/* Real Text (OCR) Button */}
-                          <button
-                            type="button"
-                            onClick={() => handleAutoFixText(item)}
-                            disabled={ocrLoadingId === item.id}
-                            className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-all border ml-1 ${
-                              ocrLoadingId === item.id
-                                ? "bg-purple-100 border-purple-300 text-purple-700 animate-pulse"
-                                : (item.isScrambled || isScrambledText(item.currentText))
-                                ? "bg-purple-600 hover:bg-purple-700 text-white border-purple-700 shadow-sm"
-                                : "bg-purple-50 hover:bg-purple-100 text-purple-700 border-purple-200"
-                            }`}
-                            title="Read visual text directly from PDF canvas"
-                          >
-                            <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                            <span>{ocrLoadingId === item.id ? "Reading..." : "Real Text (OCR)"}</span>
-                          </button>
+                                    {/* Sleek Right-Edge Resize Handle (Width resize) */}
+                                    <div
+                                      onMouseDown={(e) => {
+                                        e.stopPropagation();
+                                        e.preventDefault();
+                                        setResizingItemId({ type: "text", id: item.id });
+                                        setResizeInitial({ startX: e.clientX, startY: e.clientY, initialW: item.width, initialH: item.height });
+                                      }}
+                                      className="absolute -right-1.5 top-1/2 -translate-y-1/2 w-2 h-7 bg-white hover:bg-blue-50 border-[1.5px] border-blue-600 rounded-full cursor-ew-resize shadow-md flex items-center justify-center z-70 pointer-events-auto transition-all hover:scale-110 active:scale-95"
+                                      title="Drag to resize width (chhota ya bada karein)"
+                                    >
+                                      <div className="w-0.5 h-3 bg-blue-600/80 rounded-full" />
+                                    </div>
 
-                          {/* Delete / Clear */}
+                                    {/* Sleek Bottom-Right Corner Handle (Width & Height resize) */}
+                                    <div
+                                      onMouseDown={(e) => {
+                                        e.stopPropagation();
+                                        e.preventDefault();
+                                        setResizingItemId({ type: "text", id: item.id });
+                                        setResizeInitial({ startX: e.clientX, startY: e.clientY, initialW: item.width, initialH: item.height });
+                                      }}
+                                      className="absolute -bottom-1.5 -right-1.5 w-2.5 h-2.5 bg-blue-600 hover:bg-blue-700 rounded-[2px] border border-white cursor-nwse-resize shadow-sm z-70 pointer-events-auto transition-transform hover:scale-125"
+                                      title="Drag to resize box size"
+                                    />
+
+                                    <textarea
+                                      value={ocrLoadingId === item.id && (item.isScrambled || isScrambledText(item.currentText)) ? "" : item.currentText}
+                                      placeholder={ocrLoadingId === item.id ? "✨ Reading real text from PDF..." : "Type text..."}
+                                      autoFocus
+                                      onFocus={(e) => {
+                                        const len = e.currentTarget.value.length;
+                                        e.currentTarget.setSelectionRange(len, len);
+                                      }}
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Escape") {
+                                          setActiveTextId(null);
+                                        }
+                                      }}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        setTextList(prev =>
+                                          prev.map(t => (t.id === item.id ? { ...t, currentText: val, whiteoutOriginal: val.trim() !== t.originalText.trim(), isScrambled: false } : t))
+                                        );
+                                      }}
+                                      style={{
+                                        color: item.color || "#000000",
+                                        fontSize: `${scaledFontSize}px`,
+                                        lineHeight: `${scaledLineHeight}px`,
+                                        fontFamily: fontFamilyCss,
+                                        fontWeight: item.isBold ? 700 : 400,
+                                        fontStyle: item.isItalic ? "italic" : "normal",
+                                        textAlign: item.align || "left",
+                                        letterSpacing: "-0.15px",
+                                        backgroundColor: item.bgColor || "#ffffff",
+                                        height: "100%",
+                                        width: "100%",
+                                        padding: `${bleedY}px ${bleedX}px`,
+                                        boxSizing: "border-box",
+                                        margin: 0,
+                                        resize: "none",
+                                        overflow: "hidden",
+                                        whiteSpace: "pre-wrap",
+                                        wordBreak: "break-word",
+                                      }}
+                                      className="outline-none border-0 rounded-[1px] m-0 box-border block select-text"
+                                    />
+                                  </div>
+                                ) : (isModified || isShiftedOriginal) ? (
+                                  <div
+                                    style={{
+                                      color: item.color || "#000000",
+                                      fontSize: `${scaledFontSize}px`,
+                                      lineHeight: `${scaledLineHeight}px`,
+                                      fontFamily: fontFamilyCss,
+                                      fontWeight: item.isBold ? 700 : 400,
+                                      fontStyle: item.isItalic ? "italic" : "normal",
+                                      textAlign: item.align || "left",
+                                      textJustify: item.align === "justify" ? "inter-word" : undefined,
+                                      textAlignLast: item.align === "justify" ? "left" : undefined,
+                                      letterSpacing: "-0.15px",
+                                      backgroundColor: item.bgColor || "#ffffff",
+                                      whiteSpace: "pre-wrap",
+                                      wordBreak: "break-word",
+                                      padding: `${bleedY}px ${bleedX}px`,
+                                      boxSizing: "border-box",
+                                      width: "100%",
+                                      height: "100%",
+                                      margin: 0,
+                                    }}
+                                    className="w-full h-full cursor-text select-none block rounded-[1px]"
+                                    title="Click to edit"
+                                  >
+                                    {item.currentText || <span className="text-gray-300 italic">(empty)</span>}
+                                  </div>
+                                ) : !item.isOriginal ? (
+                                  <div
+                                    style={{
+                                      color: item.color || selectedColor || "#000000",
+                                      fontSize: `${scaledFontSize}px`,
+                                      lineHeight: `${scaledLineHeight}px`,
+                                      fontFamily: fontFamilyCss,
+                                      fontWeight: item.isBold ? 700 : 400,
+                                      fontStyle: item.isItalic ? "italic" : "normal",
+                                      textAlign: item.align || "left",
+                                      textJustify: item.align === "justify" ? "inter-word" : undefined,
+                                      backgroundColor: item.bgColor || "transparent",
+                                      whiteSpace: "pre-wrap",
+                                      wordBreak: "break-word",
+                                      padding: 0,
+                                      margin: 0,
+                                    }}
+                                    className="px-0.5 rounded-[1px] border border-dashed border-blue-400 select-none cursor-text"
+                                    title="Click to edit"
+                                  >
+                                    {item.currentText}
+                                  </div>
+                                ) : (
+                                  <div
+                                    className="w-full h-full cursor-text rounded-[1px]"
+                                    title="Click to edit"
+                                  />
+                                )}
+                              </div>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Floating Dark Pill Dock for Page Navigation & Zoom (Image 1 & 2 reference style) */}
+            {totalPages > 0 && (
+              <div
+                onClick={(e) => e.stopPropagation()}
+                className="sticky bottom-4 z-40 flex items-center gap-1.5 bg-[#2E3440]/95 backdrop-blur-md text-white px-3.5 py-1.5 rounded-lg shadow-2xl text-xs select-none shrink-0 border border-white/10"
+              >
+                <button
+                  type="button"
+                  onClick={() => scrollToPage(Math.max(1, currentPage - 1))}
+                  disabled={currentPage <= 1}
+                  className="p-1 hover:bg-white/15 disabled:opacity-30 rounded cursor-pointer transition-colors"
+                  title="Previous Page"
+                >
+                  <ChevronUp className="w-4 h-4" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => scrollToPage(Math.min(totalPages, currentPage + 1))}
+                  disabled={currentPage >= totalPages}
+                  className="p-1 hover:bg-white/15 disabled:opacity-30 rounded cursor-pointer transition-colors"
+                  title="Next Page"
+                >
+                  <ChevronDown className="w-4 h-4" />
+                </button>
+
+                <div className="flex items-center gap-1 font-medium text-xs px-1">
+                  <span className="bg-[#4C566A] px-2 py-0.5 rounded text-white font-mono min-w-[28px] text-center font-bold">
+                    {currentPage}
+                  </span>
+                  <span className="text-slate-400">/</span>
+                  <span className="text-slate-300 font-mono">{totalPages}</span>
+                </div>
+
+                <div className="w-px h-4 bg-white/20 mx-1" />
+
+                <button
+                  type="button"
+                  onClick={() => setZoom(prev => Math.max(0.3, Number((prev - 0.1).toFixed(2))))}
+                  className="p-1 hover:bg-white/15 rounded cursor-pointer text-slate-200 hover:text-white transition-colors"
+                  title="Zoom Out"
+                >
+                  <Minus className="w-4 h-4" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setZoom(prev => Math.min(2.5, Number((prev + 0.1).toFixed(2))))}
+                  className="p-1 hover:bg-white/15 rounded cursor-pointer text-slate-200 hover:text-white transition-colors"
+                  title="Zoom In"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+
+                <span className="text-[12px] font-mono font-medium text-slate-100 min-w-[44px] text-center px-1">
+                  {Math.round(zoom * 100)}%
+                </span>
+
+                <div className="w-px h-4 bg-white/20 mx-1" />
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (containerRef.current) {
+                      const deskW = containerRef.current.clientWidth - 80;
+                      const baseW = pageDimensions[currentPage]?.width || 595;
+                      if (baseW > 0) {
+                        const fitZoom = Math.min(1.5, Math.max(0.35, Number((deskW / baseW).toFixed(2))));
+                        setZoom(fitZoom);
+                      }
+                    }
+                  }}
+                  className="p-1 hover:bg-white/15 rounded cursor-pointer text-slate-200 hover:text-white transition-colors"
+                  title="Fit to Width"
+                >
+                  <ArrowLeftRight className="w-4 h-4" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPageRotations(prev => ({
+                      ...prev,
+                      [currentPage]: ((prev[currentPage] || 0) + 90) % 360
+                    }));
+                  }}
+                  className="p-1 hover:bg-white/15 rounded cursor-pointer text-slate-200 hover:text-white transition-colors"
+                  title="Rotate Page"
+                >
+                  <RotateCw className="w-4 h-4" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowFindReplace(prev => !prev)}
+                  className="p-1 hover:bg-white/15 rounded cursor-pointer text-slate-200 hover:text-white transition-colors"
+                  title="Find & Replace"
+                >
+                  <Search className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* COLUMN 3: RIGHT INSPECTOR / TEXT STYLES & SAVE PANEL (Image 2 style) */}
+          {showInspectorSidebar && (() => {
+            const selectedTextItem = textList.find(t => t.id === activeTextId);
+
+            return (
+              <div className="w-64 sm:w-72 shrink-0 bg-white border-l border-slate-200 flex flex-col justify-between p-4 overflow-y-auto select-none">
+                <div className="flex flex-col gap-4">
+                  {/* Panel Header */}
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                    <span className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                      <SlidersHorizontal className="w-3.5 h-3.5 text-blue-600" />
+                      {selectedTextItem ? "Text Styles" : "Inspector"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowInspectorSidebar(false)}
+                      className="p-1 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-600 cursor-pointer"
+                      title="Hide Inspector"
+                    >
+                      <PanelLeftClose className="w-3.5 h-3.5 rotate-180" />
+                    </button>
+                  </div>
+
+                  {/* Inspector Body */}
+                  <div className="flex flex-col gap-3.5">
+                    {/* Font Family */}
+                    <div>
+                      <label className="text-[11px] font-semibold text-slate-500 block mb-1">Font Family</label>
+                      <select
+                        value={selectedTextItem ? selectedTextItem.fontFamily : fontFamily}
+                        onChange={(e) => {
+                          const val = e.target.value as any;
+                          setFontFamily(val);
+                          if (selectedTextItem) {
+                            takeSnapshot();
+                            setTextList(prev => prev.map(t => t.id === selectedTextItem.id ? { ...t, fontFamily: val } : t));
+                          }
+                        }}
+                        className="w-full bg-slate-50 border border-slate-200 text-xs font-medium rounded-lg px-2.5 py-1.5 outline-none cursor-pointer text-slate-800 hover:bg-slate-100 transition-colors"
+                      >
+                        <option value="Helvetica">Helvetica (Sans-Serif)</option>
+                        <option value="TimesRoman">Times New Roman (Serif)</option>
+                        <option value="Courier">Courier New (Monospace)</option>
+                      </select>
+                    </div>
+
+                    {/* Font Size */}
+                    <div>
+                      <label className="text-[11px] font-semibold text-slate-500 block mb-1">Font Size</label>
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={selectedTextItem ? Math.round(selectedTextItem.fontSize) : fontSize}
+                          onChange={(e) => {
+                            const val = Number(e.target.value);
+                            setFontSize(val);
+                            if (selectedTextItem) {
+                              takeSnapshot();
+                              setTextList(prev => prev.map(t => t.id === selectedTextItem.id ? { ...t, fontSize: val } : t));
+                            }
+                          }}
+                          className="flex-1 bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg px-2.5 py-1.5 outline-none cursor-pointer text-slate-800"
+                        >
+                          {[8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48, 64].map(s => (
+                            <option key={s} value={s}>{s} pt</option>
+                          ))}
+                        </select>
+                        <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden bg-slate-50">
                           <button
                             type="button"
                             onClick={() => {
-                              takeSnapshot();
-                              if (item.isOriginal) {
-                                setTextList(prev => prev.map(t => t.id === item.id ? { ...t, currentText: "", whiteoutOriginal: true } : t));
-                              } else {
-                                setTextList(prev => prev.filter(t => t.id !== item.id));
+                              const cur = selectedTextItem ? selectedTextItem.fontSize : fontSize;
+                              const next = Math.max(6, Math.round(cur) - 1);
+                              setFontSize(next);
+                              if (selectedTextItem) {
+                                takeSnapshot();
+                                setTextList(prev => prev.map(t => t.id === selectedTextItem.id ? { ...t, fontSize: next } : t));
                               }
-                              setActiveTextId(null);
                             }}
-                            className="p-1 hover:bg-red-50 text-red-600 rounded-lg cursor-pointer ml-0.5 transition-colors"
-                            title="Delete text"
+                            className="px-2 py-1.5 hover:bg-slate-200 text-slate-600 font-bold text-xs cursor-pointer transition-colors"
+                            title="Decrease font size"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            -
                           </button>
-
-                          {/* Done button */}
                           <button
                             type="button"
-                            onClick={() => setActiveTextId(null)}
-                            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer ml-1 active:scale-95 transition-all shadow-sm"
-                            title="Apply changes (Enter)"
+                            onClick={() => {
+                              const cur = selectedTextItem ? selectedTextItem.fontSize : fontSize;
+                              const next = Math.min(96, Math.round(cur) + 1);
+                              setFontSize(next);
+                              if (selectedTextItem) {
+                                takeSnapshot();
+                                setTextList(prev => prev.map(t => t.id === selectedTextItem.id ? { ...t, fontSize: next } : t));
+                              }
+                            }}
+                            className="px-2 py-1.5 hover:bg-slate-200 text-slate-600 font-bold text-xs cursor-pointer transition-colors border-l border-slate-200"
+                            title="Increase font size"
                           >
-                            <Check className="w-3.5 h-3.5" />
-                            <span>Done</span>
+                            +
                           </button>
                         </div>
+                      </div>
+                    </div>
 
-                        {/* Inline Edit Input — Seamlessly covers original with exact background and styling */}
-                        <input
-                          type="text"
-                          value={ocrLoadingId === item.id && (item.isScrambled || isScrambledText(item.currentText)) ? "" : item.currentText}
-                          placeholder={ocrLoadingId === item.id ? "✨ Reading real text from PDF..." : "Type text..."}
-                          autoFocus
-                          onFocus={(e) => {
-                            const len = e.currentTarget.value.length;
-                            e.currentTarget.setSelectionRange(len, len);
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault();
-                              setActiveTextId(null);
-                            }
-                            if (e.key === "Escape") {
-                              setActiveTextId(null);
+                    {/* Bold & Italic */}
+                    <div>
+                      <label className="text-[11px] font-semibold text-slate-500 block mb-1">Text Style</label>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const nextVal = selectedTextItem ? !selectedTextItem.isBold : !isBold;
+                            setIsBold(nextVal);
+                            if (selectedTextItem) {
+                              takeSnapshot();
+                              setTextList(prev => prev.map(t => t.id === selectedTextItem.id ? { ...t, isBold: nextVal } : t));
                             }
                           }}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setTextList(prev =>
-                              prev.map(t => (t.id === item.id ? { ...t, currentText: val, whiteoutOriginal: true, isScrambled: false } : t))
-                            );
+                          className={`py-1.5 px-3 rounded-lg border font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition-all ${
+                            (selectedTextItem ? selectedTextItem.isBold : isBold)
+                              ? "bg-blue-600 border-blue-600 text-white shadow-xs"
+                              : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
+                          }`}
+                          title="Bold"
+                        >
+                          <Bold className="w-3.5 h-3.5" />
+                          <span>Bold</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const nextVal = selectedTextItem ? !selectedTextItem.isItalic : !isItalic;
+                            setIsItalic(nextVal);
+                            if (selectedTextItem) {
+                              takeSnapshot();
+                              setTextList(prev => prev.map(t => t.id === selectedTextItem.id ? { ...t, isItalic: nextVal } : t));
+                            }
                           }}
-                          style={{
-                            color: item.color || "#000000",
-                            fontSize: `${Math.max(9, Math.round(item.fontSize * zoom * 0.92))}px`,
-                            lineHeight: `${itemHeightPx}px`,
-                            fontFamily: item.fontFamily === "Helvetica"
-                              ? 'Arial, Helvetica, sans-serif'
-                              : item.fontFamily === "TimesRoman"
-                              ? '"Times New Roman", Times, Georgia, serif'
-                              : '"Courier New", Courier, monospace',
-                            fontWeight: item.isBold ? 700 : 400,
-                            fontStyle: item.isItalic ? "italic" : "normal",
-                            textAlign: item.align || "left",
-                            backgroundColor: item.bgColor || "#ffffff",
-                            height: "100%",
-                            width: "100%",
-                            padding: "0 2px",
-                            margin: 0,
-                            letterSpacing: "-0.01em",
-                          }}
-                          className="outline-none border-0 rounded-[1px] px-0.5 py-0 m-0 box-border block leading-none select-text"
-                        />
+                          className={`py-1.5 px-3 rounded-lg border font-bold text-xs italic flex items-center justify-center gap-1.5 cursor-pointer transition-all ${
+                            (selectedTextItem ? selectedTextItem.isItalic : isItalic)
+                              ? "bg-blue-600 border-blue-600 text-white shadow-xs"
+                              : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
+                          }`}
+                          title="Italic"
+                        >
+                          <Italic className="w-3.5 h-3.5" />
+                          <span>Italic</span>
+                        </button>
                       </div>
-                    ) : isModified ? (
-                      /* MODIFIED TEXT — show edited text cleanly with matching bg + text color (covers canvas original) */
-                      <div
-                        style={{
-                          color: item.color || "#000000",
-                          fontSize: `${Math.max(9, Math.round(item.fontSize * zoom * 0.92))}px`,
-                          lineHeight: `${itemHeightPx}px`,
-                          fontFamily: item.fontFamily === "Helvetica"
-                            ? 'Arial, Helvetica, sans-serif'
-                            : item.fontFamily === "TimesRoman"
-                            ? '"Times New Roman", Times, Georgia, serif'
-                            : '"Courier New", Courier, monospace',
-                          fontWeight: item.isBold ? 700 : 400,
-                          fontStyle: item.isItalic ? "italic" : "normal",
-                          textAlign: item.align || "left",
-                          backgroundColor: item.bgColor || "#ffffff",
-                          letterSpacing: "-0.01em",
+                    </div>
+
+                    {/* Alignment */}
+                    <div>
+                      <label className="text-[11px] font-semibold text-slate-500 block mb-1">Alignment</label>
+                      <div className="grid grid-cols-4 gap-1 bg-slate-50 p-1 rounded-lg border border-slate-200">
+                        {(["left", "center", "right", "justify"] as const).map(align => {
+                          const currentAlign = selectedTextItem ? (selectedTextItem.align || "left") : "left";
+                          const isActive = currentAlign === align;
+                          const Icon = align === "left" ? AlignLeft : align === "center" ? AlignCenter : align === "right" ? AlignRight : AlignJustify;
+
+                          return (
+                            <button
+                              key={align}
+                              type="button"
+                              onClick={() => {
+                                if (selectedTextItem) {
+                                  takeSnapshot();
+                                  setTextList(prev => prev.map(t => t.id === selectedTextItem.id ? { ...t, align } : t));
+                                }
+                              }}
+                              className={`py-1 rounded flex items-center justify-center cursor-pointer transition-all ${
+                                isActive ? "bg-white text-blue-600 shadow-xs font-bold" : "text-slate-500 hover:text-slate-800"
+                              }`}
+                              title={`Align ${align}`}
+                            >
+                              <Icon className="w-3.5 h-3.5" />
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Current Color & Palette */}
+                    <div>
+                      <label className="text-[11px] font-semibold text-slate-500 block mb-1.5">Current Color</label>
+                      <div className="flex items-center gap-2 mb-2">
+                        <div
+                          className="w-7 h-7 rounded-full border border-slate-300 shadow-xs shrink-0 cursor-pointer relative overflow-hidden"
+                          style={{ backgroundColor: selectedTextItem ? selectedTextItem.color : selectedColor }}
+                        >
+                          <input
+                            type="color"
+                            value={selectedTextItem ? selectedTextItem.color : selectedColor}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setSelectedColor(val);
+                              if (selectedTextItem) {
+                                takeSnapshot();
+                                setTextList(prev => prev.map(t => t.id === selectedTextItem.id ? { ...t, color: val } : t));
+                              }
+                            }}
+                            className="opacity-0 absolute inset-0 w-full h-full cursor-pointer"
+                          />
+                        </div>
+                        <span className="font-mono text-xs font-bold text-slate-700 uppercase">
+                          {selectedTextItem ? selectedTextItem.color : selectedColor}
+                        </span>
+                      </div>
+
+                      <div className="flex flex-wrap gap-1.5 pt-1">
+                        {COLORS.map(c => {
+                          const curColor = selectedTextItem ? selectedTextItem.color : selectedColor;
+                          const isMatch = curColor.toLowerCase() === c.value.toLowerCase();
+
+                          return (
+                            <button
+                              key={c.value}
+                              type="button"
+                              onClick={() => {
+                                setSelectedColor(c.value);
+                                if (selectedTextItem) {
+                                  takeSnapshot();
+                                  setTextList(prev => prev.map(t => t.id === selectedTextItem.id ? { ...t, color: c.value } : t));
+                                }
+                              }}
+                              className={`w-5 h-5 rounded-full border cursor-pointer transition-transform ${
+                                isMatch ? "ring-2 ring-blue-500 scale-110 shadow-xs" : "hover:scale-110 border-slate-300"
+                              }`}
+                              style={{ backgroundColor: c.value }}
+                              title={c.name}
+                            />
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* AI OCR Recovery Button */}
+                    {selectedTextItem && (
+                      <div className="pt-1">
+                        <button
+                          type="button"
+                          onClick={() => handleAutoFixText(selectedTextItem)}
+                          disabled={ocrLoadingId === selectedTextItem.id}
+                          className={`w-full py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition-all border ${
+                            ocrLoadingId === selectedTextItem.id
+                              ? "bg-purple-100 border-purple-300 text-purple-700 animate-pulse"
+                              : (selectedTextItem.isScrambled || isScrambledText(selectedTextItem.currentText))
+                              ? "bg-purple-600 hover:bg-purple-700 text-white border-purple-700 shadow-xs"
+                              : "bg-purple-50 hover:bg-purple-100 text-purple-700 border-purple-200"
+                          }`}
+                          title="Recover exact glyphs from canvas"
+                        >
+                          <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                          <span>{ocrLoadingId === selectedTextItem.id ? "Reading text from PDF..." : "Fix Text with AI OCR"}</span>
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Delete Selected Text */}
+                    {selectedTextItem && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          takeSnapshot();
+                          if (selectedTextItem.isOriginal) {
+                            setTextList(prev => prev.map(t => t.id === selectedTextItem.id ? { ...t, currentText: "", whiteoutOriginal: true } : t));
+                          } else {
+                            setTextList(prev => prev.filter(t => t.id !== selectedTextItem.id));
+                          }
+                          setActiveTextId(null);
                         }}
-                        className="w-full h-full px-0.5 whitespace-nowrap cursor-text select-none flex items-center rounded-[1px]"
-                        title="Click to edit"
+                        className="w-full py-1.5 px-3 rounded-lg text-xs font-medium text-red-600 hover:bg-red-50 border border-red-200 flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
                       >
-                        {item.currentText || <span className="text-gray-300 italic">(empty)</span>}
-                      </div>
-                    ) : !item.isOriginal ? (
-                      /* NEWLY ADDED TEXT */
-                      <div
-                        style={{
-                          color: item.color || selectedColor || "#000000",
-                          fontSize: `${item.fontSize * zoom}px`,
-                          lineHeight: `${itemHeightPx}px`,
-                          fontFamily: item.fontFamily === "Helvetica" ? "sans-serif" : item.fontFamily === "TimesRoman" ? "serif" : "monospace",
-                          fontWeight: item.isBold ? 700 : 400,
-                          fontStyle: item.isItalic ? "italic" : "normal",
-                          textAlign: item.align || "left",
-                          backgroundColor: item.bgColor || "transparent",
-                        }}
-                        className="px-0.5 rounded-[1px] border border-dashed border-blue-400 select-none whitespace-nowrap cursor-text"
-                        title="Click to edit"
-                      >
-                        {item.currentText}
-                      </div>
-                    ) : (
-                      /* ORIGINAL UNMODIFIED TEXT — iLovePDF style: invisible hit area, subtle highlight on hover */
-                      <div
-                        className="w-full h-full cursor-text rounded-[1px] hover:bg-blue-500/[0.06]"
-                        title="Click to edit"
-                      />
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Delete Selected Text</span>
+                      </button>
                     )}
                   </div>
-                );
-              })}
-          </div>
-        )}
-      </div>
+                </div>
 
-        {/* Document Status Bar under canvas */}
-        <div className="mt-2.5 flex items-center justify-between w-full px-2 text-[11px] font-medium text-slate-500">
-          <span className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            Document Studio Ready • Page {currentPage} of {totalPages}
-          </span>
-          <span className="hidden sm:flex items-center gap-2 text-slate-400">
-            <span>Zoom {Math.round(zoom * 100)}%</span>
-            <span>•</span>
-            <span>Original Layout Preserved</span>
-          </span>
+                {/* Bottom Actions of Inspector */}
+                <div className="pt-3 border-t border-slate-100 flex flex-col gap-2.5">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleUndo}
+                      disabled={undoStack.length === 0}
+                      className="flex-1 py-1.5 px-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 disabled:opacity-30 cursor-pointer flex items-center justify-center gap-1 transition-colors"
+                      title="Undo (Ctrl+Z)"
+                    >
+                      <Undo2 className="w-3.5 h-3.5" />
+                      <span>Undo</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleRedo}
+                      disabled={redoStack.length === 0}
+                      className="flex-1 py-1.5 px-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 disabled:opacity-30 cursor-pointer flex items-center justify-center gap-1 transition-colors"
+                      title="Redo (Ctrl+Shift+Z)"
+                    >
+                      <Redo2 className="w-3.5 h-3.5" />
+                      <span>Redo</span>
+                    </button>
+                  </div>
+
+                  {/* Big Red Button: Save changes ➔ */}
+                  <button
+                    type="button"
+                    onClick={handleSaveAndProcess}
+                    disabled={isSaving}
+                    className="w-full bg-[#E5322D] hover:bg-[#CC2A26] text-white py-3.5 px-4 rounded-xl font-bold text-sm shadow-md hover:shadow-lg flex items-center justify-center gap-2.5 active:scale-[0.98] transition-all disabled:opacity-75 cursor-pointer"
+                  >
+                    {isSaving ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Saving changes...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>{isSignTool ? "Sign & Download" : "Save changes"}</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
         </div>
-      </div>
-    </div>
-
-      {/* Studio Footer Info / Shortcuts */}
-      <div className="mt-3.5 py-2 px-4 bg-white/70 backdrop-blur-xs rounded-xl border border-slate-200/80 flex flex-wrap items-center justify-center gap-4 text-xs font-medium text-slate-500 shadow-2xs">
-        <span className="flex items-center gap-1.5 text-slate-700">
-          <Sparkles className="w-3.5 h-3.5 text-[#E5322D]" />
-          <span>Click on any word or line to edit directly in-place</span>
-        </span>
-        <span className="text-slate-300">•</span>
-        <span className="flex items-center gap-1.5 text-slate-700">
-          <FileSignature className="w-3.5 h-3.5 text-blue-600" />
-          <span>Use <strong>Sign</strong> to place high-res digital signatures</span>
-        </span>
-        <span className="text-slate-300">•</span>
-        <span>Press <strong>Enter</strong> or click outside to confirm changes</span>
       </div>
     </div>
   );

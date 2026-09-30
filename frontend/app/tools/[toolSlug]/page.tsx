@@ -16,24 +16,29 @@ export default async function ToolPage({ params }: PageProps) {
     notFound();
   }
 
-  const isEditorTool = ["edit-pdf", "sign-pdf", "organize-pdf"].includes(resolvedParams.toolSlug);
+  const isEditTool = resolvedParams.toolSlug === "edit-pdf";
+  const isWideWorkspace = resolvedParams.toolSlug === "edit-pdf" || resolvedParams.toolSlug === "sign-pdf" || resolvedParams.toolSlug === "organize-pdf";
 
   return (
-    <div className="flex flex-col min-h-screen bg-[#F8FAFC]">
+    <div className={`flex flex-col ${isEditTool ? "h-screen overflow-hidden" : "min-h-screen"} bg-[#F3F4F5]`}>
       <Navbar />
       
-      <main className={`flex-1 ${isEditorTool ? "pt-6 pb-12" : "pt-16 pb-24"}`}>
-        <div className={`${isEditorTool ? "max-w-[1540px]" : "max-w-4xl"} mx-auto px-3 sm:px-6 lg:px-8 text-center relative z-10`}>
+      <main className={`flex-1 ${isEditTool ? "p-1 sm:p-2 overflow-hidden flex flex-col" : "pt-12 pb-24"}`}>
+        <div className={`${isEditTool ? "w-full max-w-full" : isWideWorkspace ? "max-w-[1560px] mx-auto text-center" : "max-w-4xl mx-auto text-center"} w-full px-1 sm:px-2 md:px-4 relative z-10 ${isEditTool ? "flex-1 flex flex-col min-h-0" : ""}`}>
            
-           <h1 className={`${isEditorTool ? "text-2xl md:text-3xl mb-1.5" : "text-4xl md:text-[56px] mb-4"} font-extrabold tracking-tight text-[#1E293B]`}>
-             {tool.title}
-           </h1>
-           
-           <p className={`${isEditorTool ? "text-sm md:text-base mb-4" : "text-lg md:text-xl mb-8"} text-[#64748B] max-w-2xl mx-auto font-medium leading-relaxed`}>
-             {tool.description}
-           </p>
+           {!isEditTool && (
+             <>
+               <h1 className="text-4xl md:text-[56px] font-extrabold tracking-tight text-[#33333B] mb-4">
+                 {tool.title}
+               </h1>
+               
+               <p className="text-lg md:text-xl text-[#4A4A55] max-w-2xl mx-auto font-medium leading-relaxed mb-8">
+                 {tool.description}
+               </p>
+             </>
+           )}
 
-           <div className={isEditorTool ? "mt-3" : "mt-8"}>
+           <div className={isEditTool ? "flex-1 flex flex-col min-h-0 mt-0" : "mt-8"}>
              <ToolWorkspace 
                slug={tool.slug}
                accept={tool.accept} 
@@ -46,16 +51,18 @@ export default async function ToolPage({ params }: PageProps) {
         </div>
 
         {/* Informational Section */}
-        <div className="max-w-3xl mx-auto mt-24 px-4 text-center">
-          <h2 className="text-2xl font-bold mb-4 text-[#33333B]">How to use {tool.title}</h2>
-          <div className="w-12 h-1 bg-[#E5322D] mx-auto rounded-full mb-6" />
-          <p className="text-[#4A4A55] text-lg leading-relaxed">
-            Drag and drop your <span className="font-bold text-[#33333B]">{tool.accept.replace(/\./g, '').split(',').join(' or ').toUpperCase()}</span> file into the box above. Our secure system will automatically apply the operation while preserving your privacy. Once the processing is done, you can download the result immediately.
-          </p>
-        </div>
+        {!isEditTool && (
+          <div className="max-w-3xl mx-auto mt-32 px-4 text-center">
+            <h2 className="text-2xl font-bold mb-4 text-[#33333B]">How to use {tool.title}</h2>
+            <div className="w-12 h-1 bg-[#E5322D] mx-auto rounded-full mb-6" />
+            <p className="text-[#4A4A55] text-lg leading-relaxed">
+              Drag and drop your <span className="font-bold text-[#33333B]">{tool.accept.replace(/\./g, '').split(',').join(' or ').toUpperCase()}</span> file into the box above. Our secure system will automatically apply the operation while preserving your privacy. Once the processing is done, you can download the result immediately.
+            </p>
+          </div>
+        )}
       </main>
 
-      <Footer />
+      {!isEditTool && <Footer />}
     </div>
   );
 }

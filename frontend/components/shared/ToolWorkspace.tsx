@@ -905,10 +905,8 @@ export function ToolWorkspace({ slug, accept, maxSizeMB, actionType, allowMultip
     }
   };
 
-  const isStudioTool = (slug === "edit-pdf" || slug === "sign-pdf") && flowState === "configure";
-
   return (
-    <div className={isStudioTool ? "my-2 w-full" : "my-12"}>
+    <div className={slug === "edit-pdf" ? "flex-1 flex flex-col min-h-0 w-full my-0" : "my-12"}>
       <div className={flowState === "upload" || actionType === "merge" ? "block" : "hidden"}>
         {/* We keep UploadDropzone mounted for Merge to allow hidden input clicking */}
         {(flowState === "upload" || (flowState === "configure" && actionType === "merge")) && (
