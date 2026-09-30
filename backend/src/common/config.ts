@@ -29,19 +29,23 @@ if (process.env.NODE_ENV === "production") {
     );
   }
 
-  // Enforce mandatory SMTP configuration in production (BLOCKER 2: No Ethereal fallback in production)
-  if (
-    !process.env.SMTP_HOST ||
-    !process.env.SMTP_PORT ||
-    !process.env.SMTP_USER ||
-    !process.env.SMTP_PASS ||
-    !process.env.EMAIL_FROM ||
-    process.env.SMTP_PASS === "your_app_password_here" ||
-    process.env.SMTP_USER.trim() === "" ||
-    process.env.SMTP_HOST.trim() === ""
-  ) {
+  // Enforce email configuration in production
+  const hasResend = Boolean(process.env.RESEND_API_KEY && process.env.RESEND_API_KEY.trim() !== "");
+  const hasOfflineFallback = process.env.ALLOW_OFFLINE_EMAIL_FALLBACK === "true";
+  const hasSmtp = Boolean(
+    process.env.SMTP_HOST &&
+    process.env.SMTP_PORT &&
+    process.env.SMTP_USER &&
+    process.env.SMTP_PASS &&
+    process.env.EMAIL_FROM &&
+    process.env.SMTP_PASS !== "your_app_password_here" &&
+    process.env.SMTP_USER.trim() !== "" &&
+    process.env.SMTP_HOST.trim() !== ""
+  );
+
+  if (!hasResend && !hasOfflineFallback && !hasSmtp) {
     throw new Error(
-      "FATAL: SMTP configuration required in production (SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, EMAIL_FROM). Ethereal fallback is forbidden in production."
+      "FATAL: Email configuration required in production. Please set RESEND_API_KEY, SMTP credentials, or ALLOW_OFFLINE_EMAIL_FALLBACK=true."
     );
   }
 

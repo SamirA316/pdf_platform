@@ -97,7 +97,11 @@ export class AuthService {
       });
       logger.info("Transporter initialized with SMTP Server", "AUTH");
     } else {
-      if (envConfig.NODE_ENV === "production") {
+      if (
+        envConfig.NODE_ENV === "production" &&
+        !process.env.RESEND_API_KEY &&
+        process.env.ALLOW_OFFLINE_EMAIL_FALLBACK !== "true"
+      ) {
         throw new Error("FATAL: SMTP configuration required in production. Ethereal fallback is forbidden in production.");
       }
       logger.info("Using ethereal fallback transporter in development", "AUTH");
@@ -115,21 +119,81 @@ export class AuthService {
   }
 
   public async sendEmail(to: string, subject: string, html: string, text: string): Promise<void> {
-    try {
-      const mailer = this.getMailTransporter();
-      await mailer.sendMail({
-        from: envConfig.EMAIL_FROM,
-        to,
-        subject,
-        html,
-        text,
-      });
-    } catch {
-      logger.error(`Failed to dispatch email to ${to}`, "AUTH");
-      throw new EmailDispatchError(
-        "Failed to send email. Please verify your email configuration or try again later."
-      );
+    // 1. If RESEND_API_KEY is configured, send via Resend HTTPS REST API (Port 443 - never blocked by cloud firewalls)
+    if (process.env.RESEND_API_KEY && process.env.RESEND_API_KEY.trim() !== "") {
+      try {
+        const fromAddress = process.env.RESEND_FROM || "QuickPDF <onboarding@resend.dev>";
+        const res = await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${process.env.RESEND_API_KEY.trim()}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            from: fromAddress,
+            to: [to],
+            subject,
+            html,
+            text,
+          }),
+        });
+
+        if (res.ok) {
+          logger.info(`Email successfully dispatched via Resend to ${to}`, "AUTH");
+          return;
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          logger.error(`Resend API returned error: ${JSON.stringify(errData)}`, "AUTH");
+        }
+      } catch (err: any) {
+        logger.error(`Resend fetch error: ${err?.message}`, "AUTH");
+      }
     }
+
+    // 2. Fallback to SMTP if configured with a 6-second timeout to prevent 2-minute hangs on blocked cloud ports
+    const isSmtpConfigured = Boolean(
+      envConfig.SMTP_USER &&
+      envConfig.SMTP_PASS &&
+      envConfig.SMTP_PASS !== "your_app_password_here"
+    );
+
+    if (isSmtpConfigured) {
+      try {
+        const mailer = this.getMailTransporter();
+        await Promise.race([
+          mailer.sendMail({
+            from: envConfig.EMAIL_FROM,
+            to,
+            subject,
+            html,
+            text,
+          }),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("SMTP connection timed out (outbound port blocked by cloud provider)")), 6000)
+          ),
+        ]);
+        logger.info(`Email successfully dispatched via SMTP to ${to}`, "AUTH");
+        return;
+      } catch (smtpErr: any) {
+        logger.error(`Failed to dispatch email via SMTP to ${to}: ${smtpErr?.message}`, "AUTH");
+      }
+    }
+
+    // 3. Fallback for cloud environments where outbound SMTP is restricted
+    logger.warn(`=======================================================`, "AUTH");
+    logger.warn(`[OTP NOTIFICATION FOR ${to}]`, "AUTH");
+    logger.warn(`Subject: ${subject}`, "AUTH");
+    logger.warn(`Content: ${text}`, "AUTH");
+    logger.warn(`=======================================================`, "AUTH");
+
+    if (process.env.ALLOW_OFFLINE_EMAIL_FALLBACK === "true" || envConfig.NODE_ENV !== "production") {
+      logger.info(`ALLOW_OFFLINE_EMAIL_FALLBACK active: Continuing registration flow.`, "AUTH");
+      return;
+    }
+
+    throw new EmailDispatchError(
+      "Failed to send email (SMTP connection blocked by hosting provider). Please set ALLOW_OFFLINE_EMAIL_FALLBACK=true or add RESEND_API_KEY."
+    );
   }
 
   /**
