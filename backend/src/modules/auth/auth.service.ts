@@ -184,17 +184,32 @@ export class AuthService {
     }
 
     // 3. Try Vercel Mail Relay (uses HTTPS Port 443 from Render to Vercel Next.js serverless route)
-    const frontendBase = envConfig.FRONTEND_URL || "https://pdfplatform-frontend.vercel.app";
-    const mailRelaySecret = process.env.INTERNAL_MAIL_SECRET || "quickpdf-secret-mail-relay-key-2026";
-    if (frontendBase && !frontendBase.includes("localhost")) {
+    const relaySecret = process.env.INTERNAL_MAIL_SECRET || "quickpdf-secret-mail-relay-key-2026";
+    const potentialUrls: string[] = [
+      "https://pdfplatform-frontend.vercel.app/api/send-email",
+    ];
+
+    if (envConfig.FRONTEND_URL) {
+      const candidates = envConfig.FRONTEND_URL.split(",");
+      for (const raw of candidates) {
+        const cleaned = raw.trim().replace(/\/$/, "");
+        if (cleaned && !cleaned.includes("localhost")) {
+          const full = `${cleaned}/api/send-email`;
+          if (!potentialUrls.includes(full)) {
+            potentialUrls.push(full);
+          }
+        }
+      }
+    }
+
+    for (const relayUrl of potentialUrls) {
       try {
-        const relayUrl = `${frontendBase.replace(/\/$/, "")}/api/send-email`;
-        logger.info(`Attempting email dispatch via Vercel mail relay at ${relayUrl}`, "AUTH");
+        logger.info(`Attempting email dispatch via mail relay at ${relayUrl}`, "AUTH");
         const relayRes = await fetch(relayUrl, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "x-internal-secret": mailRelaySecret,
+            "x-internal-secret": relaySecret,
           },
           body: JSON.stringify({ to, subject, html, text }),
         });
@@ -202,15 +217,15 @@ export class AuthService {
         if (relayRes.ok) {
           const data = await relayRes.json().catch(() => ({}));
           if (data.success) {
-            logger.info(`Email successfully dispatched via Vercel mail relay to ${to}`, "AUTH");
+            logger.info(`Email successfully dispatched via mail relay to ${to}`, "AUTH");
             return;
           }
         } else {
           const errText = await relayRes.text().catch(() => "");
-          logger.warn(`Vercel mail relay returned status ${relayRes.status}: ${errText}`, "AUTH");
+          logger.warn(`Mail relay at ${relayUrl} returned status ${relayRes.status}: ${errText}`, "AUTH");
         }
       } catch (relayErr: any) {
-        logger.warn(`Vercel mail relay fetch failed: ${relayErr?.message}`, "AUTH");
+        logger.warn(`Mail relay at ${relayUrl} fetch failed: ${relayErr?.message}`, "AUTH");
       }
     }
 
