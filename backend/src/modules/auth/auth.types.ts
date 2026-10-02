@@ -16,7 +16,6 @@ export interface IRegisterResult {
   userId: string;
   email: string;
   message: string;
-  devOtp?: string | undefined;
 }
 
 export interface IOtpVerificationResult {
@@ -28,7 +27,6 @@ export interface IOtpVerificationResult {
 export interface IResendOtpResult {
   message: string;
   cooldownSeconds: number;
-  devOtp?: string | undefined;
 }
 
 export interface IForgotPasswordResult {
