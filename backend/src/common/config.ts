@@ -31,6 +31,7 @@ if (process.env.NODE_ENV === "production") {
 
   // Enforce email configuration in production
   const hasResend = Boolean(process.env.RESEND_API_KEY && process.env.RESEND_API_KEY.trim() !== "");
+  const hasBrevo = Boolean(process.env.BREVO_API_KEY && process.env.BREVO_API_KEY.trim() !== "");
   const hasOfflineFallback = process.env.ALLOW_OFFLINE_EMAIL_FALLBACK === "true";
   const hasSmtp = Boolean(
     process.env.SMTP_HOST &&
@@ -43,9 +44,9 @@ if (process.env.NODE_ENV === "production") {
     process.env.SMTP_HOST.trim() !== ""
   );
 
-  if (!hasResend && !hasOfflineFallback && !hasSmtp) {
+  if (!hasResend && !hasBrevo && !hasOfflineFallback && !hasSmtp) {
     throw new Error(
-      "FATAL: Email configuration required in production. Please set RESEND_API_KEY, SMTP credentials, or ALLOW_OFFLINE_EMAIL_FALLBACK=true."
+      "FATAL: Email configuration required in production. Please set BREVO_API_KEY, RESEND_API_KEY, SMTP credentials, or ALLOW_OFFLINE_EMAIL_FALLBACK=true."
     );
   }
 
