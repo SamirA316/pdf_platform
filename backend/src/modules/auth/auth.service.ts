@@ -118,8 +118,8 @@ export class AuthService {
     return this.transporter;
   }
 
-  public async sendEmail(to: string, subject: string, html: string, text: string): Promise<{ success: boolean; provider?: string }> {
-    // 0. Brevo (Sendinblue) HTTPS REST API (Port 443 - free 300 emails/day, never blocked by cloud firewalls)
+  public async sendEmail(to: string, subject: string, html: string, text: string): Promise<void> {
+    // 1. Try Brevo HTTPS REST API (Port 443 - never blocked by cloud firewalls)
     if (process.env.BREVO_API_KEY && process.env.BREVO_API_KEY.trim() !== "") {
       try {
         const senderEmail = process.env.BREVO_SENDER_EMAIL || envConfig.SMTP_USER || "pdfplatform382@gmail.com";
@@ -142,7 +142,7 @@ export class AuthService {
 
         if (res.ok) {
           logger.info(`Email successfully dispatched via Brevo to ${to}`, "AUTH");
-          return { success: true, provider: "brevo" };
+          return;
         } else {
           const errData = await res.json().catch(() => ({}));
           logger.error(`Brevo API returned error: ${JSON.stringify(errData)}`, "AUTH");
@@ -152,7 +152,7 @@ export class AuthService {
       }
     }
 
-    // 1. If RESEND_API_KEY is configured, send via Resend HTTPS REST API (Port 443 - never blocked by cloud firewalls)
+    // 2. Try Resend HTTPS REST API (Port 443 - never blocked by cloud firewalls)
     if (process.env.RESEND_API_KEY && process.env.RESEND_API_KEY.trim() !== "") {
       try {
         const fromAddress = process.env.RESEND_FROM || "QuickPDF <onboarding@resend.dev>";
@@ -173,7 +173,7 @@ export class AuthService {
 
         if (res.ok) {
           logger.info(`Email successfully dispatched via Resend to ${to}`, "AUTH");
-          return { success: true, provider: "resend" };
+          return;
         } else {
           const errData = await res.json().catch(() => ({}));
           logger.error(`Resend API returned error: ${JSON.stringify(errData)}`, "AUTH");
@@ -183,7 +183,38 @@ export class AuthService {
       }
     }
 
-    // 2. Fallback to SMTP if configured with a 6-second timeout to prevent 2-minute hangs on blocked cloud ports
+    // 3. Try Vercel Mail Relay (uses HTTPS Port 443 from Render to Vercel Next.js serverless route)
+    const frontendBase = envConfig.FRONTEND_URL || "https://pdfplatform-frontend.vercel.app";
+    const mailRelaySecret = process.env.INTERNAL_MAIL_SECRET || "quickpdf-secret-mail-relay-key-2026";
+    if (frontendBase && !frontendBase.includes("localhost")) {
+      try {
+        const relayUrl = `${frontendBase.replace(/\/$/, "")}/api/send-email`;
+        logger.info(`Attempting email dispatch via Vercel mail relay at ${relayUrl}`, "AUTH");
+        const relayRes = await fetch(relayUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-internal-secret": mailRelaySecret,
+          },
+          body: JSON.stringify({ to, subject, html, text }),
+        });
+
+        if (relayRes.ok) {
+          const data = await relayRes.json().catch(() => ({}));
+          if (data.success) {
+            logger.info(`Email successfully dispatched via Vercel mail relay to ${to}`, "AUTH");
+            return;
+          }
+        } else {
+          const errText = await relayRes.text().catch(() => "");
+          logger.warn(`Vercel mail relay returned status ${relayRes.status}: ${errText}`, "AUTH");
+        }
+      } catch (relayErr: any) {
+        logger.warn(`Vercel mail relay fetch failed: ${relayErr?.message}`, "AUTH");
+      }
+    }
+
+    // 4. Try direct SMTP if configured with a 6-second timeout (for local dev or open port environments)
     const isSmtpConfigured = Boolean(
       envConfig.SMTP_USER &&
       envConfig.SMTP_PASS &&
@@ -202,25 +233,21 @@ export class AuthService {
             text,
           }),
           new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("SMTP connection timed out (outbound port blocked by cloud provider)")), 6000)
+            setTimeout(() => reject(new Error("SMTP connection timed out")), 6000)
           ),
         ]);
-        logger.info(`Email successfully dispatched via SMTP to ${to}`, "AUTH");
-        return { success: true, provider: "smtp" };
+        logger.info(`Email successfully dispatched via direct SMTP to ${to}`, "AUTH");
+        return;
       } catch (smtpErr: any) {
-        logger.error(`Failed to dispatch email via SMTP to ${to}: ${smtpErr?.message}`, "AUTH");
+        logger.error(`Direct SMTP dispatch failed: ${smtpErr?.message}`, "AUTH");
       }
     }
 
-    // 3. Fallback for cloud environments where outbound SMTP is blocked
-    logger.warn(`=======================================================`, "AUTH");
-    logger.warn(`🔑 [VERIFICATION CODE FOR ${to}]:`, "AUTH");
-    logger.warn(`👉 ${text}`, "AUTH");
-    logger.warn(`=======================================================`, "AUTH");
-
-    // Automatically succeed so user registration is never blocked on Render Free tier
-    logger.info(`Cloud SMTP restricted on free tier: Logged OTP to server logs. Registration proceeds.`, "AUTH");
-    return { success: false, provider: "fallback" };
+    // 5. Fail securely if no email delivery channel succeeded
+    logger.error(`FATAL: All email dispatch channels failed for ${to}`, "AUTH");
+    throw new EmailDispatchError(
+      "Unable to send verification code to your email. Please try again or verify your email address."
+    );
   }
 
   /**
@@ -283,9 +310,8 @@ export class AuthService {
 
     logger.info(`Verification OTP generated and dispatched to ${input.email}`, "AUTH");
 
-    let emailResult: { success: boolean; provider?: string } = { success: false, provider: "fallback" };
     try {
-      emailResult = await this.sendEmail(
+      await this.sendEmail(
         input.email,
         "Verify your QuickPDF Account",
         generateOtpEmailHtml({
@@ -312,10 +338,7 @@ export class AuthService {
     return {
       userId: user.id,
       email: user.email,
-      message: emailResult.success
-        ? "Verification code sent to your email."
-        : "Verification code generated (Cloud test mode).",
-      devOtp: emailResult.success ? undefined : rawOtp,
+      message: "Verification code sent to your email.",
     };
   }
 
@@ -444,9 +467,8 @@ export class AuthService {
 
     logger.info(`Verification OTP regenerated and dispatched to ${input.email}`, "AUTH");
 
-    let emailResult: { success: boolean; provider?: string } = { success: false, provider: "fallback" };
     try {
-      emailResult = await this.sendEmail(
+      await this.sendEmail(
         input.email,
         "New Verification Code - QuickPDF",
         generateOtpEmailHtml({
@@ -467,11 +489,8 @@ export class AuthService {
     }
 
     return {
-      message: emailResult.success
-        ? "New verification code sent to your email."
-        : "New verification code generated (Cloud test mode).",
+      message: "New verification code sent to your email.",
       cooldownSeconds: 60,
-      devOtp: emailResult.success ? undefined : rawOtp,
     };
   }
 

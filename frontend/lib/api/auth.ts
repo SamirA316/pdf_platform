@@ -43,7 +43,6 @@ export interface AuthResponse {
   userId?: string;
   token?: string;
   cooldownSeconds?: number;
-  devOtp?: string;
 }
 
 /**
