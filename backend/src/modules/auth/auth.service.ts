@@ -118,7 +118,40 @@ export class AuthService {
     return this.transporter;
   }
 
-  public async sendEmail(to: string, subject: string, html: string, text: string): Promise<void> {
+  public async sendEmail(to: string, subject: string, html: string, text: string): Promise<{ success: boolean; provider?: string }> {
+    // 0. Brevo (Sendinblue) HTTPS REST API (Port 443 - free 300 emails/day, never blocked by cloud firewalls)
+    if (process.env.BREVO_API_KEY && process.env.BREVO_API_KEY.trim() !== "") {
+      try {
+        const senderEmail = process.env.BREVO_SENDER_EMAIL || envConfig.SMTP_USER || "pdfplatform382@gmail.com";
+        const senderName = process.env.BREVO_SENDER_NAME || "QuickPDF";
+        const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+          method: "POST",
+          headers: {
+            "api-key": process.env.BREVO_API_KEY.trim(),
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+          },
+          body: JSON.stringify({
+            sender: { name: senderName, email: senderEmail },
+            to: [{ email: to }],
+            subject,
+            htmlContent: html,
+            textContent: text,
+          }),
+        });
+
+        if (res.ok) {
+          logger.info(`Email successfully dispatched via Brevo to ${to}`, "AUTH");
+          return { success: true, provider: "brevo" };
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          logger.error(`Brevo API returned error: ${JSON.stringify(errData)}`, "AUTH");
+        }
+      } catch (err: any) {
+        logger.error(`Brevo fetch error: ${err?.message}`, "AUTH");
+      }
+    }
+
     // 1. If RESEND_API_KEY is configured, send via Resend HTTPS REST API (Port 443 - never blocked by cloud firewalls)
     if (process.env.RESEND_API_KEY && process.env.RESEND_API_KEY.trim() !== "") {
       try {
@@ -140,7 +173,7 @@ export class AuthService {
 
         if (res.ok) {
           logger.info(`Email successfully dispatched via Resend to ${to}`, "AUTH");
-          return;
+          return { success: true, provider: "resend" };
         } else {
           const errData = await res.json().catch(() => ({}));
           logger.error(`Resend API returned error: ${JSON.stringify(errData)}`, "AUTH");
@@ -173,7 +206,7 @@ export class AuthService {
           ),
         ]);
         logger.info(`Email successfully dispatched via SMTP to ${to}`, "AUTH");
-        return;
+        return { success: true, provider: "smtp" };
       } catch (smtpErr: any) {
         logger.error(`Failed to dispatch email via SMTP to ${to}: ${smtpErr?.message}`, "AUTH");
       }
@@ -187,7 +220,7 @@ export class AuthService {
 
     // Automatically succeed so user registration is never blocked on Render Free tier
     logger.info(`Cloud SMTP restricted on free tier: Logged OTP to server logs. Registration proceeds.`, "AUTH");
-    return;
+    return { success: false, provider: "fallback" };
   }
 
   /**
@@ -250,8 +283,9 @@ export class AuthService {
 
     logger.info(`Verification OTP generated and dispatched to ${input.email}`, "AUTH");
 
+    let emailResult: { success: boolean; provider?: string } = { success: false, provider: "fallback" };
     try {
-      await this.sendEmail(
+      emailResult = await this.sendEmail(
         input.email,
         "Verify your QuickPDF Account",
         generateOtpEmailHtml({
@@ -278,7 +312,10 @@ export class AuthService {
     return {
       userId: user.id,
       email: user.email,
-      message: "Verification code sent to your email.",
+      message: emailResult.success
+        ? "Verification code sent to your email."
+        : "Verification code generated (Cloud test mode).",
+      devOtp: emailResult.success ? undefined : rawOtp,
     };
   }
 
@@ -407,8 +444,9 @@ export class AuthService {
 
     logger.info(`Verification OTP regenerated and dispatched to ${input.email}`, "AUTH");
 
+    let emailResult: { success: boolean; provider?: string } = { success: false, provider: "fallback" };
     try {
-      await this.sendEmail(
+      emailResult = await this.sendEmail(
         input.email,
         "New Verification Code - QuickPDF",
         generateOtpEmailHtml({
@@ -429,8 +467,11 @@ export class AuthService {
     }
 
     return {
-      message: "New verification code sent to your email.",
+      message: emailResult.success
+        ? "New verification code sent to your email."
+        : "New verification code generated (Cloud test mode).",
       cooldownSeconds: 60,
+      devOtp: emailResult.success ? undefined : rawOtp,
     };
   }
 

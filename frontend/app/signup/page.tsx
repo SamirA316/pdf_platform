@@ -19,6 +19,7 @@ export default function SignupPage() {
   const [step, setStep] = useState<1 | 2>(1);
   const [otp, setOtp] = useState("");
   const [registeredEmail, setRegisteredEmail] = useState("");
+  const [fallbackOtp, setFallbackOtp] = useState<string | null>(null);
 
   const dispatch = useDispatch();
   const router = useRouter();
@@ -76,6 +77,11 @@ export default function SignupPage() {
     try {
       const { resendUserOtp } = await import("@/lib/api");
       const res = await resendUserOtp({ email: registeredEmail });
+      const devOtp = res?.devOtp || (res as any)?.data?.devOtp;
+      if (devOtp) {
+        setFallbackOtp(devOtp);
+        setOtp(devOtp);
+      }
       setResendSuccess(res.message || "New verification code sent!");
       setResendCooldown(60);
       const timer = setInterval(() => {
@@ -97,8 +103,12 @@ export default function SignupPage() {
     if (validate()) {
       setLoading(true);
       try {
-        await registerUser({ name: formData.name, email: formData.email, password: formData.password });
-
+        const res = await registerUser({ name: formData.name, email: formData.email, password: formData.password });
+        const devOtp = res?.devOtp || (res as any)?.data?.devOtp;
+        if (devOtp) {
+          setFallbackOtp(devOtp);
+          setOtp(devOtp);
+        }
         setRegisteredEmail(formData.email);
         setStep(2);
       } catch (err) {
@@ -360,6 +370,17 @@ export default function SignupPage() {
             </form>
           ) : (
             <form className="space-y-4" onSubmit={handleVerifyOTP} noValidate>
+              {fallbackOtp && (
+                <div className="bg-amber-50 border border-amber-200 text-amber-900 p-3 rounded-xl text-sm mb-3">
+                  <div className="flex items-center justify-between font-bold">
+                    <span className="flex items-center gap-1.5">🔑 Verification Code:</span>
+                    <span className="text-base tracking-widest font-mono bg-white px-2.5 py-0.5 rounded-lg border border-amber-300 text-amber-900 font-extrabold shadow-sm">{fallbackOtp}</span>
+                  </div>
+                  <p className="text-xs text-amber-700 mt-1">
+                    Cloud SMTP restricted on free host. Code has been automatically filled for you!
+                  </p>
+                </div>
+              )}
               <div>
                 <label htmlFor="otp" className="block text-sm font-bold text-[#33333B] mb-1">
                   Verification Code
