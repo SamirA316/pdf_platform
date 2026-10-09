@@ -48,13 +48,13 @@ export const errorMiddleware = (
 
   // 5. Database / Prisma Internal Errors (C7: prevent leaking DB schema/errors)
   if (err?.name?.includes("Prisma") || (typeof err?.code === "string" && err.code.startsWith("P2"))) {
-    logger.error("Internal database error.", "HTTP");
+    logger.error("Internal database error.", "HTTP", { message: err?.message, name: err?.name, code: err?.code });
     sendError(res, "DATABASE_ERROR", "A database error occurred. Please try again later.", 500);
     return;
   }
 
   // 6. Unhandled / Server Errors
-  logger.error("Unhandled server error.", "HTTP");
+  logger.error("Unhandled server error.", "HTTP", { message: err?.message, stack: err?.stack });
   const statusCode = err.status || err.statusCode || 500;
   const message = statusCode === 500 && process.env.NODE_ENV === "production"
     ? "An unexpected internal server error occurred."

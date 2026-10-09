@@ -24,6 +24,15 @@ router.post("/logout", (req, res, next) => authController.logout(req, res, next)
 router.post("/forgot-password", authLimiter, passwordResetLimiter, (req, res, next) => authController.forgotPassword(req, res, next));
 router.post("/reset-password", authLimiter, passwordResetLimiter, (req, res, next) => authController.resetPassword(req, res, next));
 
+// OAuth 2.0 social endpoints
+router.get("/oauth/config", (req, res) => authController.getOAuthConfig(req, res));
+router.get("/oauth/google", (req, res) => authController.googleOAuth(req, res));
+router.get("/oauth/google/callback", (req, res, next) => authController.googleOAuthCallback(req, res, next));
+router.post("/oauth/send-code", authLimiter, (req, res, next) => authController.sendSocialConfirmationCode(req, res, next));
+router.post("/oauth/mock", authLimiter, (req, res, next) => authController.mockOAuth(req, res, next));
+router.post("/confirm-login", authLimiter, (req, res, next) => authController.confirmLogin(req, res, next));
+router.get("/confirm-status", (req, res, next) => authController.checkConfirmStatus(req, res, next));
+
 // Authenticated session profile endpoint
 router.get("/me", requireStrictAuth, (req, res, next) => authController.getMe(req, res, next));
 

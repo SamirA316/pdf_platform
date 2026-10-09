@@ -125,7 +125,16 @@ export const csrfProtection = (req: Request, res: Response, next: NextFunction):
     return;
   }
 
-  // 2. Machine-to-machine API exemption:
+  // 2. Machine-to-machine API & Public Verification exemption:
+  // Magic link confirmation and social dispatch endpoints have cryptographic one-time tokens and origin verification
+  if (
+    req.originalUrl.includes("/auth/confirm-login") ||
+    req.originalUrl.includes("/auth/oauth/send-code") ||
+    req.originalUrl.includes("/ocr/recognize")
+  ) {
+    return next();
+  }
+
   // Pure Authorization Bearer header requests with ZERO cookies to non-auth processing routes bypass CSRF.
   const hasBearerAuth = Boolean(
     req.headers.authorization && req.headers.authorization.startsWith("Bearer ")

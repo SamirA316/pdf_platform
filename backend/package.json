@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "build": "tsc",
-    "dev": "tsx watch src/server.ts",
+    "dev": "npm run prisma:generate && tsx watch src/server.ts",
     "start": "node dist/server.js",
     "test": "tsx tests/run_regression.ts",
     "test:smoke": "tsx tests/smoke_flow.ts",

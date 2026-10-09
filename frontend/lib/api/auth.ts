@@ -148,3 +148,97 @@ export async function logoutUser(): Promise<{ message: string }> {
   const res = await apiClient<any>("/api/v1/auth/logout", { method: "POST" });
   return unwrapResponse<{ message: string }>(res);
 }
+
+export interface OAuthConfig {
+  googleConfigured: boolean;
+  appleConfigured: boolean;
+  facebookConfigured: boolean;
+}
+
+/**
+ * Check which OAuth providers are configured with client IDs on backend
+ * GET /api/v1/auth/oauth/config
+ */
+export async function getOAuthConfig(): Promise<OAuthConfig> {
+  const res = await apiClient<any>("/api/v1/auth/oauth/config");
+  return unwrapResponse<OAuthConfig>(res);
+}
+
+/**
+ * Perform social login / account chooser sign-in
+ * POST /api/v1/auth/oauth/mock
+ */
+export async function mockSocialLogin(payload: {
+  email: string;
+  name?: string;
+  provider: "google" | "apple" | "facebook";
+}): Promise<AuthResponse> {
+  const res = await apiClient<any>("/api/v1/auth/oauth/mock", { data: payload });
+  const unwrapped = unwrapResponse<AuthResponse>(res);
+  if (typeof window !== "undefined") {
+    if (unwrapped.token) {
+      localStorage.setItem("pdf_session_token", unwrapped.token);
+    }
+    if (unwrapped.user) {
+      localStorage.setItem("pdf_user", JSON.stringify(unwrapped.user));
+    }
+  }
+  return unwrapped;
+}
+
+/**
+ * Send 6-digit confirmation code / OTP to user's Google or social email address
+ * POST /api/v1/auth/oauth/send-code
+ */
+export async function sendSocialConfirmationCode(payload: {
+  email: string;
+  name?: string;
+  provider: "google" | "apple" | "facebook";
+}): Promise<{ email: string; message: string; cooldownSeconds: number; confirmUrl?: string }> {
+  const res = await apiClient<any>("/api/v1/auth/oauth/send-code", { data: payload });
+  return unwrapResponse<{ email: string; message: string; cooldownSeconds: number; confirmUrl?: string }>(res);
+}
+
+/**
+ * 1-Click direct confirmation link verification
+ * POST /api/v1/auth/confirm-login
+ */
+export async function confirmLoginWithToken(payload: {
+  email: string;
+  token: string;
+}): Promise<AuthResponse> {
+  const res = await apiClient<any>("/api/v1/auth/confirm-login", { data: payload });
+  const unwrapped = unwrapResponse<AuthResponse>(res);
+  if (typeof window !== "undefined") {
+    if (unwrapped.token) {
+      localStorage.setItem("pdf_session_token", unwrapped.token);
+    }
+    if (unwrapped.user) {
+      localStorage.setItem("pdf_user", JSON.stringify(unwrapped.user));
+    }
+  }
+  return unwrapped;
+}
+
+/**
+ * Check if the user confirmed their login via email link
+ * GET /api/v1/auth/confirm-status?email=...
+ */
+export async function checkConfirmStatus(
+  email: string
+): Promise<{ confirmed: boolean; session?: { user: any; token: string } }> {
+  const res = await apiClient<any>(`/api/v1/auth/confirm-status?email=${encodeURIComponent(email)}`);
+  const unwrapped = unwrapResponse<{ confirmed: boolean; session?: { user: any; token: string } }>(res);
+  if (typeof window !== "undefined" && unwrapped.session) {
+    if (unwrapped.session.token) {
+      localStorage.setItem("pdf_session_token", unwrapped.session.token);
+    }
+    if (unwrapped.session.user) {
+      localStorage.setItem("pdf_user", JSON.stringify(unwrapped.session.user));
+    }
+  }
+  return unwrapped;
+}
+
+
+

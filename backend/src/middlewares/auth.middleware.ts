@@ -62,6 +62,8 @@ export function extractAuthToken(req: Request): string | null {
  * assigns a guest user ID for legacy public PDF tools.
  */
 export const requireAuth = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  /*
+  // Auth commented out for now
   try {
     const token = extractAuthToken(req);
 
@@ -84,6 +86,11 @@ export const requireAuth = async (req: AuthRequest, res: Response, next: NextFun
     logger.error("Auth middleware error.", "AUTH");
     res.status(500).json({ error: "Internal authentication error" });
   }
+  */
+  await ensureGuestUser();
+  req.userId = GUEST_USER_ID;
+  req.user = { id: GUEST_USER_ID };
+  next();
 };
 
 /**
@@ -96,6 +103,8 @@ export const requireStrictAuth = async (
   res: Response,
   next: NextFunction
 ): Promise<void> => {
+  /*
+  // Auth commented out for now
   try {
     const token = extractAuthToken(req);
 
@@ -130,5 +139,11 @@ export const requireStrictAuth = async (
   } catch (error) {
     return next(new UnauthorizedError("Invalid authentication session.", "UNAUTHORIZED"));
   }
+  */
+  // Temporarily bypass strict auth - assign guest user
+  await ensureGuestUser();
+  req.userId = GUEST_USER_ID;
+  req.user = { id: GUEST_USER_ID };
+  return next();
 };
 

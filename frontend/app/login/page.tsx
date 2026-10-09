@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -8,13 +8,18 @@ import { CheckCircle2, AlertCircle, Eye, EyeOff } from "lucide-react";
 import { useDispatch } from "react-redux";
 import { login } from "@/store/slices/authSlice";
 import { Logo } from "@/components/shared/Logo";
-import { loginUser } from "@/lib/api";
+import { loginUser, getOAuthConfig, API_BASE_URL } from "@/lib/api";
+import { AccountChooserModal } from "@/components/auth/AccountChooserModal";
 
 export default function LoginPage() {
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [errors, setErrors] = useState({ email: "", password: "", server: "" });
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  const [accountChooserOpen, setAccountChooserOpen] = useState(false);
+  const [selectedSocialProvider, setSelectedSocialProvider] = useState<"Google" | "Apple" | "Facebook">("Google");
+  const [isSocialConfigured, setIsSocialConfigured] = useState(false);
 
   const dispatch = useDispatch();
   const router = useRouter();
@@ -76,8 +81,87 @@ export default function LoginPage() {
     }
   };
 
-  const handleSocialLogin = (provider: string) => {
-    alert(`${provider} login is currently unavailable. Please use email and password.`);
+  // Listen for OAuth completion from popup window or 1-click email confirmation
+  useEffect(() => {
+    const handleAuthMessage = (event: MessageEvent) => {
+      if (event.data?.type === "OAUTH_SUCCESS") {
+        const { user, token } = event.data;
+        if (token) localStorage.setItem("pdf_session_token", token);
+        if (user) {
+          localStorage.setItem("pdf_user", JSON.stringify(user));
+          dispatch(login(user));
+        }
+        setAccountChooserOpen(false);
+        router.push("/");
+      }
+    };
+
+    window.addEventListener("message", handleAuthMessage);
+
+    let channel: BroadcastChannel | null = null;
+    try {
+      channel = new BroadcastChannel("quickpdf_auth");
+      channel.onmessage = (event) => {
+        if (event.data?.type === "OAUTH_SUCCESS") {
+          const { user, token } = event.data;
+          if (token) localStorage.setItem("pdf_session_token", token);
+          if (user) {
+            localStorage.setItem("pdf_user", JSON.stringify(user));
+            dispatch(login(user));
+          }
+          setAccountChooserOpen(false);
+          router.push("/");
+        }
+      };
+    } catch {
+      // Ignore
+    }
+
+    return () => {
+      window.removeEventListener("message", handleAuthMessage);
+      channel?.close();
+    };
+  }, [dispatch, router]);
+
+  const handleSocialLogin = async (provider: "Google" | "Apple" | "Facebook") => {
+    setSelectedSocialProvider(provider);
+
+    // Calculate center coordinates for popup window
+    const width = 560;
+    const height = 680;
+    const left = window.screenX + (window.outerWidth - width) / 2;
+    const top = window.screenY + (window.outerHeight - height) / 2;
+
+    let targetUrl = `/auth/google-chooser?provider=${provider.toLowerCase()}`;
+    try {
+      const config = await getOAuthConfig();
+      const configured =
+        provider === "Google"
+          ? config.googleConfigured
+          : provider === "Apple"
+          ? config.appleConfigured
+          : config.facebookConfigured;
+
+      setIsSocialConfigured(configured);
+
+      if (configured && provider === "Google") {
+        targetUrl = `${API_BASE_URL}/api/v1/auth/oauth/google?popup=1`;
+      }
+    } catch {
+      setIsSocialConfigured(false);
+    }
+
+    // Open authentic centered popup window
+    const popup = window.open(
+      targetUrl,
+      `${provider}SignIn`,
+      `width=${width},height=${height},left=${left},top=${top},status=no,toolbar=no,menubar=no,location=no,scrollbars=yes`
+    );
+
+    // Fallback if browser blocks popups
+    if (!popup || popup.closed || typeof popup.closed === "undefined") {
+      setAccountChooserOpen(true);
+    }
   };
 
   return (
@@ -285,6 +369,14 @@ export default function LoginPage() {
           </p>
         </div>
       </div>
+
+      {/* Social Account Chooser Modal */}
+      <AccountChooserModal
+        isOpen={accountChooserOpen}
+        onClose={() => setAccountChooserOpen(false)}
+        provider={selectedSocialProvider}
+        isConfigured={isSocialConfigured}
+      />
     </div>
   );
 }
