@@ -80,4 +80,9 @@ export const envConfig = {
   SMTP_USER: process.env.SMTP_USER,
   SMTP_PASS: process.env.SMTP_PASS,
   EMAIL_FROM: process.env.EMAIL_FROM || '"QuickPDF" <noreply@quickpdf.local>',
+  GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || "",
+  GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET || "",
+  GOOGLE_CALLBACK_URL: process.env.GOOGLE_CALLBACK_URL || "http://localhost:3001/api/v1/auth/oauth/google/callback",
+  APPLE_CLIENT_ID: process.env.APPLE_CLIENT_ID || "",
+  FACEBOOK_APP_ID: process.env.FACEBOOK_APP_ID || "",
 };

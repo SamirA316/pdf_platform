@@ -106,7 +106,8 @@ export function Navbar() {
             </nav>
           </div>
 
-          {/* Right: Auth */}
+          {/* Right: Auth (Commented out for now) */}
+          {/*
           <div className="hidden lg:flex items-center h-full">
             {isLoading ? (
               <div className="w-20 h-5 bg-gray-100 animate-pulse rounded" />
@@ -135,6 +136,7 @@ export function Navbar() {
               </div>
             )}
           </div>
+          */}
 
           {/* Mobile toggle */}
           <div className="lg:hidden flex items-center h-full">
@@ -151,6 +153,7 @@ export function Navbar() {
             <Link href="/tools/split-pdf"    onClick={() => setIsMobileMenuOpen(false)} className="block py-4 font-bold text-[#33333B] border-b border-[#F0F0F0] uppercase text-[14px] tracking-wide">Split PDF</Link>
             <Link href="/tools/compress-pdf" onClick={() => setIsMobileMenuOpen(false)} className="block py-4 font-bold text-[#33333B] border-b border-[#F0F0F0] uppercase text-[14px] tracking-wide">Compress PDF</Link>
             <Link href="/#tools"             onClick={() => setIsMobileMenuOpen(false)} className="block py-4 font-bold text-[#33333B] border-b border-[#F0F0F0] uppercase text-[14px] tracking-wide">All Tools</Link>
+            {/* Auth options commented out for now
             <div className="flex flex-col gap-3 mt-6 pt-4 border-t border-gray-100">
               {user ? (
                 <div className="auth-enter">
@@ -177,6 +180,7 @@ export function Navbar() {
                 </div>
               )}
             </div>
+            */}
           </div>
         )}
       </header>

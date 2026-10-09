@@ -189,35 +189,6 @@ export class AuthController {
     }
   }
 
-  async mockOAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      if (envConfig.NODE_ENV === "production") {
-        throw new BadRequestError("Mock OAuth is strictly disallowed in production.");
-      }
-
-      const { provider } = req.params;
-      const { email, name } = req.body;
-
-      if (!email || !name) {
-        throw new BadRequestError("Mock OAuth requires name and email in request body.");
-      }
-
-      // In dev, find or create user and return session
-      const result = await authService.register({
-        name: `${name} (${provider})`,
-        email,
-        password: "DevOAuthPassword123!",
-      }).catch(async () => {
-        // If already exists, return login
-        return authService.login({ email, password: "DevOAuthPassword123!" });
-      });
-
-      sendSuccess(res, { provider, result });
-    } catch (err) {
-      next(err);
-    }
-  }
-
   /**
    * B1 & B2: List active sessions for authenticated user
    */
@@ -330,6 +301,240 @@ export class AuthController {
 
       const result = await authService.changePassword(req.userId, req.sessionId, parsed.data);
       sendSuccess(res, result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * OAuth Status Configuration Check
+   */
+  getOAuthConfig(req: Request, res: Response): void {
+    sendSuccess(res, {
+      googleConfigured: Boolean(envConfig.GOOGLE_CLIENT_ID && envConfig.GOOGLE_CLIENT_SECRET),
+      appleConfigured: Boolean(envConfig.APPLE_CLIENT_ID),
+      facebookConfigured: Boolean(envConfig.FACEBOOK_APP_ID),
+    });
+  }
+
+  /**
+   * Google OAuth Entrypoint (prompts account chooser)
+   */
+  async googleOAuth(req: Request, res: Response): Promise<void> {
+    const isPopup = req.query.popup === "1";
+    if (isPopup) {
+      res.cookie("oauth_popup", "1", { httpOnly: true, maxAge: 10 * 60 * 1000 });
+    }
+
+    if (!envConfig.GOOGLE_CLIENT_ID || !envConfig.GOOGLE_CLIENT_SECRET) {
+      res.redirect(`${envConfig.FRONTEND_URL}/auth/google-chooser?provider=google${isPopup ? "&popup=1" : ""}`);
+      return;
+    }
+
+    const rootUrl = "https://accounts.google.com/o/oauth2/v2/auth";
+    const redirectUri = envConfig.GOOGLE_CALLBACK_URL;
+    const params = new URLSearchParams({
+      redirect_uri: redirectUri,
+      client_id: envConfig.GOOGLE_CLIENT_ID,
+      access_type: "offline",
+      response_type: "code",
+      prompt: "select_account",
+      scope: "https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email",
+    });
+
+    res.redirect(`${rootUrl}?${params.toString()}`);
+  }
+
+  /**
+   * Google OAuth Callback
+   */
+  async googleOAuthCallback(req: Request, res: Response, next: NextFunction): Promise<void> {
+    const code = req.query.code as string;
+    const isPopup = req.cookies?.oauth_popup === "1" || req.query.popup === "1";
+    res.clearCookie("oauth_popup");
+
+    if (!code) {
+      if (isPopup) {
+        res.send(`
+          <!DOCTYPE html><html><body><script>
+            window.opener && window.opener.postMessage({ type: "OAUTH_ERROR", message: "Sign in was cancelled." }, "*");
+            window.close();
+          </script></body></html>
+        `);
+        return;
+      }
+      res.redirect(`${envConfig.FRONTEND_URL}/login?error=oauth_denied`);
+      return;
+    }
+
+    try {
+      const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          code,
+          client_id: envConfig.GOOGLE_CLIENT_ID,
+          client_secret: envConfig.GOOGLE_CLIENT_SECRET,
+          redirect_uri: envConfig.GOOGLE_CALLBACK_URL,
+          grant_type: "authorization_code",
+        }),
+      });
+
+      const tokenData = await tokenRes.json();
+      if (!tokenData.access_token) {
+        throw new BadRequestError("Failed to obtain Google access token.");
+      }
+
+      const userRes = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
+        headers: { Authorization: `Bearer ${tokenData.access_token}` },
+      });
+      const profile = await userRes.json();
+
+      if (!profile.email) {
+        throw new BadRequestError("Google profile did not contain an email address.");
+      }
+
+      const result = await authService.socialLogin({
+        email: profile.email,
+        name: profile.name || profile.given_name || "Google User",
+        provider: "google",
+        providerId: profile.id,
+      });
+
+      res.cookie(SESSION_COOKIE_NAME, result.token, COOKIE_OPTIONS);
+      res.cookie("token", result.token, COOKIE_OPTIONS);
+
+      if (isPopup) {
+        res.send(`
+          <!DOCTYPE html>
+          <html>
+            <head><title>Signed In</title></head>
+            <body style="background:#131314;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;">
+              <p>Signing in to QuickPDF...</p>
+              <script>
+                if (window.opener) {
+                  window.opener.postMessage({
+                    type: "OAUTH_SUCCESS",
+                    token: ${JSON.stringify(result.token)},
+                    user: ${JSON.stringify(result.user)}
+                  }, "*");
+                  window.close();
+                } else {
+                  window.location.href = "${envConfig.FRONTEND_URL}/auth/callback?token=${encodeURIComponent(result.token)}&user=${encodeURIComponent(JSON.stringify(result.user))}";
+                }
+              </script>
+            </body>
+          </html>
+        `);
+        return;
+      }
+
+      const redirectTarget = `${envConfig.FRONTEND_URL}/auth/callback?token=${encodeURIComponent(result.token)}&user=${encodeURIComponent(JSON.stringify(result.user))}`;
+      res.redirect(redirectTarget);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * Dev Mode Mock OAuth Endpoint
+   */
+  async mockOAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { email, name, provider } = req.body;
+      if (!email || typeof email !== "string" || !email.includes("@")) {
+        throw new BadRequestError("A valid email is required for social login.");
+      }
+
+      const result = await authService.socialLogin({
+        email,
+        name: name || email.split("@")[0],
+        provider: provider || "google",
+      });
+
+      res.cookie(SESSION_COOKIE_NAME, result.token, COOKIE_OPTIONS);
+      res.cookie("token", result.token, COOKIE_OPTIONS);
+
+      sendSuccess(res, result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * Send verification code / OTP to user's Google or social email address
+   */
+  async sendSocialConfirmationCode(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { email, name, provider } = req.body;
+      if (!email || typeof email !== "string" || !email.includes("@")) {
+        throw new BadRequestError("A valid email address is required.");
+      }
+
+      const result = await authService.sendSocialConfirmationCode({
+        email,
+        name,
+        provider: provider || "google",
+      });
+
+      sendSuccess(res, result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * 1-Click Email confirmation endpoint
+   */
+  async confirmLogin(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { email, token } = req.body;
+      if (!email || !token) {
+        throw new BadRequestError("Email and confirmation token are required.");
+      }
+
+      const result = await authService.confirmLoginByToken(email, token);
+
+      res.cookie(SESSION_COOKIE_NAME, result.token, COOKIE_OPTIONS);
+      res.cookie("token", result.token, COOKIE_OPTIONS);
+
+      sendSuccess(res, result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * Check if user email has been verified/confirmed by magic link
+   */
+  async checkConfirmStatus(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const email = req.query.email as string;
+      if (!email) {
+        throw new BadRequestError("Email query parameter required.");
+      }
+
+      const user = await prisma.user.findUnique({ where: { email: email.toLowerCase().trim() } });
+      if (!user) {
+        sendSuccess(res, { confirmed: false });
+        return;
+      }
+
+      // If user is verified and has no pending OTP request, it is confirmed!
+      const confirmed = user.isVerified && !user.otp;
+      let sessionData = null;
+
+      if (confirmed) {
+        const { rawToken } = await sessionService.createSession(user.id);
+        res.cookie(SESSION_COOKIE_NAME, rawToken, COOKIE_OPTIONS);
+        res.cookie("token", rawToken, COOKIE_OPTIONS);
+        sessionData = {
+          user: authService.toUserDto(user),
+          token: rawToken,
+        };
+      }
+
+      sendSuccess(res, { confirmed, session: sessionData });
     } catch (err) {
       next(err);
     }

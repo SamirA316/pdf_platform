@@ -947,8 +947,9 @@ export function ToolWorkspace({ slug, accept, maxSizeMB, actionType, allowMultip
         <ErrorState 
           message={processError?.message || `A file exceeds the maximum allowed size of ${Number(process.env.NEXT_PUBLIC_MAX_FILE_SIZE_MB || maxSizeMB || 50)}MB. Please select a smaller file.`}
           onRetry={handleRetry} 
-          actionText={processError?.isAuth ? "Sign In" : undefined}
-          onAction={processError?.isAuth ? () => router.push("/login") : undefined}
+          /* Auth redirect commented out for now */
+          /* actionText={processError?.isAuth ? "Sign In" : undefined} */
+          /* onAction={processError?.isAuth ? () => router.push("/login") : undefined} */
         />
       )}
     </div>

@@ -49,7 +49,7 @@ import {
   Settings
 } from "lucide-react";
 import { PDFDocument, rgb, StandardFonts, degrees } from "pdf-lib";
-import { apiClient } from "@/lib/apiClient";
+import { apiClient, API_BASE_URL } from "@/lib/apiClient";
 
 // ==========================================
 // INTERFACES & TYPES
@@ -296,27 +296,56 @@ export function isScrambledText(str: string): boolean {
   if (!str || str.trim().length === 0) return false;
   const s = str.trim();
 
-  // 1. Starts with unusual punctuation-letter combo like ":-lbu" or ";-lbu" or "=-lbu"
+  // 1. Starts with unusual punctuation-letter combo from known bad font CMaps (e.g. ":-lbu", ";-lbu", "=-lbu")
   if (/^[:;=][\-_][a-zA-Z]/.test(s)) return true;
 
-  // 2. Contains unprintable ASCII control characters (0x01-0x08, 0x0B-0x0C, 0x0E-0x1F)
-  // e.g. \u0006 in "m\u0006fKH es", \u0007 in "sAK\u0007mHEfl", \u0015, \u0013
-  if (/[\u0001-\u0008\u000B\u000C\u000E-\u001F]/.test(s)) return true;
+  // 2. Contains unprintable ASCII control characters (0x01-0x08, 0x0B-0x0C, 0x0E-0x1F) or Unicode replacement character
+  if (/[\u0001-\u0008\u000B\u000C\u000E-\u001F\uFFFD]/.test(s)) return true;
 
-  // 3. Contains exotic/corrupted unicode characters from missing CMap fallbacks
-  // e.g. Latin Extended-B (\u0180-\u024F), Lao (\u0E80-\u0EFF), Cyrillic (\u0400-\u04FF), Arabic math (\u08A0-\u08FF)
-  const exoticMatches = s.match(/[\u0180-\u024F\u0E80-\u0EFF\u0400-\u04FF\u0102-\u017F\u0250-\u02AF\u08A0-\u08FF\u2000-\u206F]/g);
-  if (exoticMatches && exoticMatches.length >= 1) {
-    if (s.length < 35 || exoticMatches.length >= 2) return true;
-  }
+  // 3. Contains Private Use Area characters (common indicator of unmapped PDF subset glyphs)
+  if (/[\uE000-\uF8FF]/.test(s)) return true;
 
-  // 4. Punctuation or brackets inside lowercase words: e.g. "Š]lub" or "wb_uu" or "v|†tib" or "H;d_moѴo]‹"
-  if (/[a-zA-Z][\]\[_\|†;=][a-zA-Z]/.test(s)) return true;
-
-  // 5. Repeated consonants/unpronounceable clusters (e.g. "mmv-ub", "cb‰um")
-  if (/\b[a-z]*[bcdfghjklmnpqrstvwxyz]{5,}[a-z]*\b/i.test(s)) return true;
+  // 4. Truly corrupted exotic characters from unmapped CMap offset errors (excluding common punctuation, quotes, dashes, bullets, math)
+  const corruptMatches = s.match(/[\u0E80-\u0EFF\u08A0-\u08FF\uFFF0-\uFFFF]/g);
+  if (corruptMatches && corruptMatches.length >= 1) return true;
 
   return false;
+}
+
+// Map detected PDF font names to high-fidelity system/web fonts to ensure 1:1 character metrics
+export function getFontFamilyCss(item: EditableText): string {
+  const raw = (item.fontNameRaw || "").toLowerCase();
+  if (item.fontFamily === "TimesRoman" || /times|roman|georgia|cambria|garamond|palatino|serif/i.test(raw)) {
+    return '"Times New Roman", Times, Georgia, "Nimbus Roman No9 L", serif';
+  }
+  if (item.fontFamily === "Courier" || /courier|mono|consolas|menlo|monaco/i.test(raw)) {
+    return '"Courier New", Courier, monospace';
+  }
+  if (/calibri/i.test(raw)) {
+    return 'Calibri, "Segoe UI", Candara, Arial, sans-serif';
+  }
+  if (/aptos/i.test(raw)) {
+    return 'Aptos, Calibri, "Segoe UI", Arial, sans-serif';
+  }
+  if (/roboto/i.test(raw)) {
+    return 'Roboto, "Helvetica Neue", Arial, sans-serif';
+  }
+  if (/open\s*sans/i.test(raw)) {
+    return '"Open Sans", "Helvetica Neue", Arial, sans-serif';
+  }
+  if (/segoe/i.test(raw)) {
+    return '"Segoe UI", Tahoma, Arial, sans-serif';
+  }
+  if (/tahoma/i.test(raw)) {
+    return 'Tahoma, Verdana, Arial, sans-serif';
+  }
+  if (/verdana/i.test(raw)) {
+    return 'Verdana, Geneva, sans-serif';
+  }
+  if (/inter/i.test(raw)) {
+    return 'Inter, "Helvetica Neue", Arial, sans-serif';
+  }
+  return 'Arial, "Helvetica Neue", Helvetica, sans-serif';
 }
 
 // Crop text bounding box from rendered visual canvas for AI OCR recovery
@@ -326,14 +355,18 @@ export function cropCanvasForOcr(
   y: number,
   width: number,
   height: number,
-  padding = 8
+  padding = 6,
+  zoom = 1.0
 ): string {
-  const dpr = canvas.width / (parseFloat(canvas.style.width) || canvas.width || 1);
-  const realX = x * dpr;
-  const realY = y * dpr;
-  const realW = width * dpr;
-  const realH = height * dpr;
-  const realPadding = padding * dpr;
+  const cssWidth = parseFloat(canvas.style.width) || canvas.width;
+  const baseWidth = cssWidth / (zoom || 1.0);
+  const scale = canvas.width / (baseWidth || 1.0);
+
+  const realX = x * scale;
+  const realY = y * scale;
+  const realW = width * scale;
+  const realH = height * scale;
+  const realPadding = padding * scale;
 
   const cw = canvas.width;
   const ch = canvas.height;
@@ -343,10 +376,12 @@ export function cropCanvasForOcr(
   const cropW = Math.min(cw - cropX, realW + realPadding * 2);
   const cropH = Math.min(ch - cropY, realH + realPadding * 2);
 
+  if (cropW <= 0 || cropH <= 0) return "";
+
   const tempCanvas = document.createElement("canvas");
-  const scale = cropH < 35 * dpr ? 2.5 : cropH < 60 * dpr ? 2 : 1.5;
-  tempCanvas.width = Math.round(cropW * scale);
-  tempCanvas.height = Math.round(cropH * scale);
+  const upScale = cropH < 50 ? 2.5 : cropH < 100 ? 2.0 : 1.5;
+  tempCanvas.width = Math.round(cropW * upScale);
+  tempCanvas.height = Math.round(cropH * upScale);
 
   const ctx = tempCanvas.getContext("2d");
   if (!ctx) return "";
@@ -718,14 +753,10 @@ export function extractAndClusterPageText(
 
     const [vx, vy] = viewport.convertToViewportPoint(item.transform[4], item.transform[5]);
     
-    // In PDF specification, font size is defined by the transformation matrix:
-    // Math.hypot(transform[2], transform[3]) is the true font size (vertical scale).
-    // item.height in PDF.js is only glyph bounding box (~70% of font size), so prioritize transform!
-    const transformFontSize = Math.max(
-      Math.hypot(item.transform[2], item.transform[3]),
-      Math.hypot(item.transform[0], item.transform[1])
-    );
-    const exactPt = transformFontSize > 0 ? transformFontSize : (item.height && item.height > 0 ? item.height : 12);
+    // In PDF specification, vertical font size is Math.hypot(transform[2], transform[3]).
+    // Do not take Math.max with transform[0..1] which is horizontal scaling/letter spacing.
+    const vFontSize = Math.hypot(item.transform[2], item.transform[3]);
+    const exactPt = vFontSize > 0 ? vFontSize : (item.height && item.height > 0 ? item.height : 12);
     const fontHeightPt = exactPt;
     const fontWidthPt = Math.hypot(item.transform[0], item.transform[1]) || exactPt;
 
@@ -759,10 +790,11 @@ export function extractAndClusterPageText(
   if (rawList.length === 0) return [];
 
   // Detect if this page contains corrupted ToUnicode CMap / font encoding
-  // If ANY item contains control characters or scrambled glyphs, the whole font/page is corrupted!
-  const pageHasCorruptedFonts = rawList.some(item =>
-    isScrambledText(item.str) || /[\u0001-\u0008\u000B\u000C\u000E-\u001F]/.test(item.str)
+  // Only flag if a significant proportion (>= 4 items and > 30% of items) are corrupted
+  const corruptedItems = rawList.filter(item =>
+    isScrambledText(item.str) || /[\u0001-\u0008\u000B\u000C\u000E-\u001F\uFFFD]/.test(item.str)
   );
+  const pageHasCorruptedFonts = corruptedItems.length >= 4 && (corruptedItems.length / rawList.length) > 0.30;
 
   const pageHasSerif = rawList.some(item =>
     /times|roman|georgia|cambria|garamond|palatino|baskerville|minion|nimbusrom|ptmr|cmr|\bserif\b/i.test(item.fontNameCombined) &&
@@ -797,6 +829,8 @@ export function extractAndClusterPageText(
     origPdfY: number;
     origWidth: number;
     origHeight: number;
+    totalChars?: number;
+    weightedFontSum?: number;
   }
 
   const clusters: ClusterGroup[] = [];
@@ -829,7 +863,11 @@ export function extractAndClusterPageText(
         current.minY = Math.min(current.minY, item.topY);
         current.maxX = Math.max(current.maxX, item.vx + item.width);
         current.maxY = Math.max(current.maxY, item.topY + item.height);
-        current.fontSize = Math.max(current.fontSize, item.fontSizePt);
+
+        // Maintain character-weighted font size so a single symbol/punctuation doesn't blow up line font size
+        current.totalChars = (current.totalChars || 0) + item.str.length;
+        current.weightedFontSum = (current.weightedFontSum || 0) + (item.fontSizePt * item.str.length);
+        current.fontSize = Math.round((current.weightedFontSum / current.totalChars) * 10) / 10;
 
         current.lastVx = item.vx;
         current.lastWidth = item.width;
@@ -878,6 +916,8 @@ export function extractAndClusterPageText(
       origPdfY: item.origPdfY,
       origWidth: item.origWidth,
       origHeight: item.origHeight,
+      totalChars: item.str.length,
+      weightedFontSum: item.fontSizePt * item.str.length,
     };
   }
 
@@ -1110,6 +1150,14 @@ export function extractAndClusterPageText(
         curPara.width = newMaxX - curPara.x;
         curPara.height = (line.maxY - curPara.y);
         curPara.lineHeight = (line.vy - curPara.lines[0].vy) / (curPara.lines.length - 1);
+
+        // Character-weighted font size across the entire paragraph
+        const totalChars = curPara.lines.reduce((acc, l) => acc + l.text.length, 0);
+        if (totalChars > 0) {
+          const weightedSum = curPara.lines.reduce((acc, l) => acc + (l.fontSize * l.text.length), 0);
+          curPara.fontSize = Math.round((weightedSum / totalChars) * 10) / 10;
+        }
+
         if (line.isScrambled) curPara.isScrambled = true;
         continue;
       } else {
@@ -1148,7 +1196,7 @@ export function extractAndClusterPageText(
       const minX = Math.min(...para.lines.map(l => l.minX));
       const maxX = Math.max(...para.lines.map(l => l.maxX));
       para.x = minX;
-      para.width = Math.max(maxX - minX + 6, 30);
+      para.width = Math.max(maxX - minX + 12, 30);
       para.height = Math.max(para.height, para.lines.length * para.lineHeight + (para.fontSize * 0.45));
 
       const nonTerminalLines = para.lines.slice(0, para.lines.length - 1);
@@ -1204,7 +1252,7 @@ export function extractAndClusterPageText(
     const words = fullText.split(/\s+/);
     const maxWordLen = words.reduce((max, w) => Math.max(max, w.length), 0);
     const minWordWidth = Math.max(maxWordLen * para.fontSize * 0.65, 30);
-    const finalWidth = Math.max(para.width + 4, minWordWidth);
+    const finalWidth = Math.max(para.width + 6, minWordWidth);
     const finalHeight = Math.max(para.height, para.fontSize * 1.05);
 
     return {
@@ -1343,22 +1391,96 @@ export function EditConfig({ files, onProcess, slug }: EditConfigProps) {
 
   // Auto-Fix Scrambled Text: Crops visual text from canvas and runs AI OCR to restore original characters
   const handleAutoFixText = async (item: EditableText) => {
-    if (!pdfCanvasRef.current) return;
+    const canvas = pageCanvasRefs.current[item.page] || pdfCanvasRef.current;
+    if (!canvas) return;
     setOcrLoadingId(item.id);
     try {
       const cropDataUrl = cropCanvasForOcr(
-        pdfCanvasRef.current,
+        canvas,
         item.x,
         item.y,
         item.width,
-        item.height
+        item.height,
+        6,
+        zoom
       );
       if (!cropDataUrl) return;
 
-      // Note: OCR text reconstruction is scheduled for the upcoming V1 AI module (/api/v1/jobs)
-      console.info("OCR text reconstruction will be available via /api/v1/jobs in the upcoming AI release.");
-    } catch (err) {
-      console.warn("Auto-fix OCR warning:", err);
+      let recognizedText = "";
+
+      // 1. Fast Backend OCR endpoint (/api/v1/ocr/recognize)
+      try {
+        const res = await apiClient<any>("/api/v1/ocr/recognize", {
+          data: { image: cropDataUrl, language: "eng" },
+        });
+        recognizedText = res.data?.text || res.text || "";
+      } catch {
+        try {
+          const directRes = await fetch(`${API_BASE_URL}/api/v1/ocr/recognize`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ image: cropDataUrl, language: "eng" }),
+          });
+          if (directRes.ok) {
+            const data = await directRes.json();
+            recognizedText = data.data?.text || data.text || "";
+          }
+        } catch {
+          // Backend not reachable, will try client-side
+        }
+      }
+
+      // 2. Client-side browser Tesseract.js fallback
+      if (!recognizedText && typeof window !== "undefined") {
+        try {
+          if (!(window as any).Tesseract) {
+            await new Promise<void>((resolve, reject) => {
+              const script = document.createElement("script");
+              script.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+              script.async = true;
+              script.onload = () => resolve();
+              script.onerror = () => reject();
+              document.head.appendChild(script);
+            });
+          }
+          if ((window as any).Tesseract) {
+            const worker = await (window as any).Tesseract.createWorker("eng");
+            const res = await worker.recognize(cropDataUrl);
+            recognizedText = res.data?.text || "";
+            await worker.terminate();
+          }
+        } catch {
+          // Client-side fallback failed
+        }
+      }
+
+      if (recognizedText && recognizedText.trim().length > 0) {
+        let cleaned = recognizedText.replace(/\r\n/g, "\n").trim();
+        // Fix common OCR artifact where uppercase "I" or "I'm" is recognized as "|"
+        cleaned = cleaned
+          .replace(/(^|\s)\|(\s)/g, "$1I$2")
+          .replace(/(^|\s)\|(')/g, "$1I$2")
+          .replace(/^\|\s*/, "I ");
+
+        // If original paragraph was a flowing paragraph without hard newlines, unwrap accidental newlines
+        if (!item.originalText.includes("\n")) {
+          cleaned = cleaned.replace(/\n+/g, " ").replace(/\s{2,}/g, " ").trim();
+        }
+
+        setTextList(prev => prev.map(t => {
+          if (t.id === item.id) {
+            return {
+              ...t,
+              currentText: cleaned,
+              originalText: cleaned,
+              isScrambled: false,
+            };
+          }
+          return t;
+        }));
+      }
+    } catch {
+      // Ignored
     } finally {
       setOcrLoadingId(null);
     }
@@ -3770,11 +3892,7 @@ export function EditConfig({ files, onProcess, slug }: EditConfigProps) {
                           const scaledFontSize = Math.max(6, item.fontSize * zoom);
                           const scaledLineHeight = (item.lineHeight || item.fontSize * 1.25) * zoom;
 
-                          const fontFamilyCss = item.fontFamily === "TimesRoman"
-                            ? '"Times New Roman", Times, Georgia, "Nimbus Roman No9 L", serif'
-                            : item.fontFamily === "Courier"
-                            ? '"Courier New", Courier, monospace'
-                            : 'Arial, "Helvetica Neue", Helvetica, sans-serif';
+                          const fontFamilyCss = getFontFamilyCss(item);
 
                           return (
                             <div key={item.id} className="contents">
@@ -3810,9 +3928,6 @@ export function EditConfig({ files, onProcess, slug }: EditConfigProps) {
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setActiveTextId(item.id);
-                                  if (item.isScrambled || isScrambledText(item.currentText) || isScrambledText(item.originalText)) {
-                                    handleAutoFixText(item);
-                                  }
                                 }}
                                 className={`absolute transition-all ${
                                   isSelected
@@ -3856,7 +3971,7 @@ export function EditConfig({ files, onProcess, slug }: EditConfigProps) {
                                     />
 
                                     <textarea
-                                      value={ocrLoadingId === item.id && (item.isScrambled || isScrambledText(item.currentText)) ? "" : item.currentText}
+                                      value={ocrLoadingId === item.id ? "" : item.currentText}
                                       placeholder={ocrLoadingId === item.id ? "✨ Reading real text from PDF..." : "Type text..."}
                                       autoFocus
                                       onFocus={(e) => {

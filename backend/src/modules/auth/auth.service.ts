@@ -1,3 +1,5 @@
+import path from "path";
+import fs from "fs";
 import crypto from "crypto";
 import bcrypt from "bcrypt";
 import nodemailer, { Transporter } from "nodemailer";
@@ -13,7 +15,7 @@ import {
 } from "../../common/errors/AppError";
 import { sessionService } from "./session.service";
 import { securityEventService } from "../users/security-event.service";
-import { generateOtpEmailHtml } from "./email-templates";
+import { generateOtpEmailHtml, generateMagicLinkEmailHtml } from "./email-templates";
 import {
   IUserDto,
   IAuthResult,
@@ -58,7 +60,7 @@ export class AuthService {
     this.transporter = transporter;
   }
 
-  private toUserDto(user: {
+  public toUserDto(user: {
     id: string;
     name: string;
     email: string;
@@ -86,16 +88,30 @@ export class AuthService {
     );
 
     if (isSmtpConfigured) {
-      this.transporter = nodemailer.createTransport({
-        host: envConfig.SMTP_HOST,
-        port: envConfig.SMTP_PORT,
-        secure: envConfig.SMTP_SECURE,
-        auth: {
-          user: envConfig.SMTP_USER,
-          pass: envConfig.SMTP_PASS,
-        },
-      });
-      logger.info("Transporter initialized with SMTP Server", "AUTH");
+      const isGmail = envConfig.SMTP_HOST?.includes("gmail");
+      this.transporter = nodemailer.createTransport(
+        isGmail
+          ? {
+              service: "gmail",
+              auth: {
+                user: envConfig.SMTP_USER,
+                pass: envConfig.SMTP_PASS,
+              },
+              pool: true,
+              maxConnections: 3,
+            }
+          : {
+              host: envConfig.SMTP_HOST,
+              port: envConfig.SMTP_PORT,
+              secure: envConfig.SMTP_SECURE,
+              auth: {
+                user: envConfig.SMTP_USER,
+                pass: envConfig.SMTP_PASS,
+              },
+              pool: true,
+            }
+      );
+      logger.info("Transporter initialized with SMTP Server (Connection Pooled)", "AUTH");
     } else {
       if (
         envConfig.NODE_ENV === "production" &&
@@ -119,7 +135,48 @@ export class AuthService {
   }
 
   public async sendEmail(to: string, subject: string, html: string, text: string): Promise<void> {
-    // 1. Try Brevo HTTPS REST API (Port 443 - never blocked by cloud firewalls)
+    const isSmtpConfigured = Boolean(
+      envConfig.SMTP_USER &&
+      envConfig.SMTP_PASS &&
+      envConfig.SMTP_PASS !== "your_app_password_here"
+    );
+
+    // 1. Try Direct SMTP first (especially in local dev / non-blocked environments)
+    if (isSmtpConfigured && (!process.env.RENDER || envConfig.NODE_ENV !== "production")) {
+      try {
+        const mailer = this.getMailTransporter();
+        const logoPath = path.resolve(__dirname, "../../assets/logo.png");
+        const attachments = fs.existsSync(logoPath)
+          ? [
+              {
+                filename: "logo.png",
+                path: logoPath,
+                cid: "quickpdf-logo",
+              },
+            ]
+          : [];
+
+        await Promise.race([
+          mailer.sendMail({
+            from: envConfig.EMAIL_FROM,
+            to,
+            subject,
+            html,
+            text,
+            attachments,
+          }),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("SMTP connection timed out")), 12000)
+          ),
+        ]);
+        logger.info(`Email successfully dispatched via direct SMTP to ${to}`, "AUTH");
+        return;
+      } catch (smtpErr: any) {
+        logger.warn(`Direct SMTP dispatch failed: ${smtpErr?.message}. Falling back to HTTP relays.`, "AUTH");
+      }
+    }
+
+    // 2. Try Brevo HTTPS REST API (Port 443 - never blocked by cloud firewalls)
     if (process.env.BREVO_API_KEY && process.env.BREVO_API_KEY.trim() !== "") {
       try {
         const senderEmail = process.env.BREVO_SENDER_EMAIL || envConfig.SMTP_USER || "pdfplatform382@gmail.com";
@@ -152,7 +209,7 @@ export class AuthService {
       }
     }
 
-    // 2. Try Resend HTTPS REST API (Port 443 - never blocked by cloud firewalls)
+    // 3. Try Resend HTTPS REST API (Port 443 - never blocked by cloud firewalls)
     if (process.env.RESEND_API_KEY && process.env.RESEND_API_KEY.trim() !== "") {
       try {
         const fromAddress = process.env.RESEND_FROM || "QuickPDF <onboarding@resend.dev>";
@@ -183,7 +240,7 @@ export class AuthService {
       }
     }
 
-    // 3. Try Vercel Mail Relay (uses HTTPS Port 443 from Render to Vercel Next.js serverless route)
+    // 4. Try Vercel Mail Relay (uses HTTPS Port 443 from Render to Vercel Next.js serverless route)
     const relaySecret = process.env.INTERNAL_MAIL_SECRET || "quickpdf-secret-mail-relay-key-2026";
     const potentialUrls: string[] = [
       "https://pdfplatform-frontend.vercel.app/api/send-email",
@@ -226,35 +283,6 @@ export class AuthService {
         }
       } catch (relayErr: any) {
         logger.warn(`Mail relay at ${relayUrl} fetch failed: ${relayErr?.message}`, "AUTH");
-      }
-    }
-
-    // 4. Try direct SMTP if configured with a 6-second timeout (for local dev or open port environments)
-    const isSmtpConfigured = Boolean(
-      envConfig.SMTP_USER &&
-      envConfig.SMTP_PASS &&
-      envConfig.SMTP_PASS !== "your_app_password_here"
-    );
-
-    if (isSmtpConfigured) {
-      try {
-        const mailer = this.getMailTransporter();
-        await Promise.race([
-          mailer.sendMail({
-            from: envConfig.EMAIL_FROM,
-            to,
-            subject,
-            html,
-            text,
-          }),
-          new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("SMTP connection timed out")), 6000)
-          ),
-        ]);
-        logger.info(`Email successfully dispatched via direct SMTP to ${to}`, "AUTH");
-        return;
-      } catch (smtpErr: any) {
-        logger.error(`Direct SMTP dispatch failed: ${smtpErr?.message}`, "AUTH");
       }
     }
 
@@ -328,7 +356,7 @@ export class AuthService {
     try {
       await this.sendEmail(
         input.email,
-        "Verify your QuickPDF Account",
+        `${rawOtp} is your QuickPDF verification code`,
         generateOtpEmailHtml({
           title: "Verify Your Email Address",
           subtitle: "Thank you for creating an account with QuickPDF. Use the 6-digit code below to complete your registration.",
@@ -485,7 +513,7 @@ export class AuthService {
     try {
       await this.sendEmail(
         input.email,
-        "New Verification Code - QuickPDF",
+        `${rawOtp} is your new QuickPDF verification code`,
         generateOtpEmailHtml({
           title: "Your New Verification Code",
           subtitle: "You requested a new verification code for your QuickPDF account. Enter this code to verify your account.",
@@ -596,7 +624,7 @@ export class AuthService {
     try {
       await this.sendEmail(
         input.email,
-        "Password Reset Request - QuickPDF",
+        `${rawResetCode} is your QuickPDF password reset code`,
         generateOtpEmailHtml({
           title: "Reset Your Password",
           subtitle: "We received a request to reset your QuickPDF account password. Use the verification code below to proceed.",
@@ -757,6 +785,200 @@ export class AuthService {
     return {
       message: "Password changed successfully. All other sessions have been logged out.",
       revokedOtherSessionsCount: revokedCount,
+    };
+  }
+
+  /**
+   * OAuth Social Login (Google, Apple, Facebook)
+   * Finds or creates verified user, establishes session, and records security event.
+   */
+  async socialLogin(profile: {
+    email: string;
+    name: string;
+    provider: "google" | "apple" | "facebook";
+    providerId?: string;
+  }): Promise<IAuthResult> {
+    const email = profile.email.toLowerCase().trim();
+    let user = await prisma.user.findUnique({ where: { email } });
+
+    if (!user) {
+      const randomPassword = crypto.randomBytes(32).toString("hex");
+      const hashedPassword = await bcrypt.hash(randomPassword, 12);
+
+      user = await prisma.user.create({
+        data: {
+          name: profile.name || email.split("@")[0] || "QuickPDF User",
+          email,
+          password: hashedPassword,
+          isVerified: true,
+          isActive: true,
+        },
+      });
+
+      await prisma.storageQuota.create({
+        data: {
+          userId: user.id,
+          quotaBytes: envConfig.USER_STORAGE_QUOTA_BYTES,
+          usedBytes: 0,
+        },
+      }).catch(() => {});
+    } else {
+      if (!user.isVerified) {
+        user = await prisma.user.update({
+          where: { id: user.id },
+          data: { isVerified: true, otp: null, otpExpires: null },
+        });
+      }
+    }
+
+    if (!user.isActive) {
+      throw new UnauthorizedError("Account is unavailable.", "ACCOUNT_DEACTIVATED");
+    }
+
+    const { rawToken } = await sessionService.createSession(user.id);
+
+    await securityEventService.record({
+      userId: user.id,
+      type: "LOGIN_SUCCESS",
+    }).catch(() => {});
+
+    return {
+      user: this.toUserDto(user),
+      token: rawToken,
+    };
+  }
+
+  /**
+   * Dispatches a confirmation code / OTP to the user's Google account email.
+   */
+  async sendSocialConfirmationCode(profile: {
+    email: string;
+    name?: string;
+    provider: "google" | "apple" | "facebook";
+  }): Promise<{ email: string; message: string; cooldownSeconds: number; confirmUrl?: string }> {
+    const email = profile.email.toLowerCase().trim();
+    let user = await prisma.user.findUnique({ where: { email } });
+
+    if (!user) {
+      const randomPassword = crypto.randomBytes(32).toString("hex");
+      const hashedPassword = await bcrypt.hash(randomPassword, 12);
+
+      user = await prisma.user.create({
+        data: {
+          name: profile.name || email.split("@")[0] || "QuickPDF User",
+          email,
+          password: hashedPassword,
+          isVerified: false,
+          isActive: true,
+        },
+      });
+
+      await prisma.storageQuota.create({
+        data: {
+          userId: user.id,
+          quotaBytes: envConfig.USER_STORAGE_QUOTA_BYTES,
+          usedBytes: 0,
+        },
+      }).catch(() => {});
+    }
+
+    if (!user.isActive) {
+      throw new UnauthorizedError("Account is unavailable.", "ACCOUNT_DEACTIVATED");
+    }
+
+    const rawToken = crypto.randomBytes(32).toString("hex");
+    const hashedToken = crypto.createHash("sha256").update(rawToken).digest("hex");
+    const otpExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        otp: hashedToken,
+        otpExpires,
+        otpAttempts: 0,
+        otpLastSentAt: new Date(),
+      },
+    });
+
+    const providerTitle =
+      profile.provider === "google"
+        ? "Google"
+        : profile.provider === "apple"
+        ? "Apple"
+        : "Facebook";
+
+    const confirmUrl = `${envConfig.FRONTEND_URL}/auth/confirm?token=${rawToken}&email=${encodeURIComponent(user.email)}`;
+
+    logger.info(`Dispatching direct confirmation link email to ${user.email}`, "AUTH");
+
+    await this.sendEmail(
+      user.email,
+      `QuickPDF: Confirm your ${providerTitle} Sign-in`,
+      generateMagicLinkEmailHtml({
+        title: `Confirm your ${providerTitle} Sign-in`,
+        subtitle: `Hi ${user.name}, we received a sign-in request using your ${providerTitle} account. Click the button below to confirm and complete your login:`,
+        confirmUrl,
+        expireMinutes: 15,
+      }),
+      `Confirm your QuickPDF ${providerTitle} sign-in by opening this link: ${confirmUrl} (expires in 15 minutes).`
+    );
+
+    return {
+      email: user.email,
+      confirmUrl,
+      message: `Confirmation email sent to ${user.email}. Please check your Gmail (including Spam folder) to confirm.`,
+      cooldownSeconds: 30,
+    };
+  }
+
+  /**
+   * Confirm login via 1-click email direct link
+   */
+  async confirmLoginByToken(email: string, token: string): Promise<IAuthResult> {
+    const normalizedEmail = email.toLowerCase().trim();
+    const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+
+    if (!user) {
+      throw new BadRequestError("Invalid verification request.");
+    }
+
+    if (!user.otp || !user.otpExpires) {
+      throw new BadRequestError("No active confirmation request found. Please request a new confirmation email.");
+    }
+
+    if (new Date() > user.otpExpires) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { otp: null, otpExpires: null },
+      });
+      throw new BadRequestError("This confirmation link has expired. Please request a new one.");
+    }
+
+    const hashedAttempt = crypto.createHash("sha256").update(token).digest("hex");
+    if (user.otp !== hashedAttempt) {
+      throw new BadRequestError("Invalid confirmation link or token.");
+    }
+
+    // Mark verified, clear OTP
+    const updatedUser = await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        isVerified: true,
+        otp: null,
+        otpExpires: null,
+      },
+    });
+
+    const { rawToken } = await sessionService.createSession(updatedUser.id);
+
+    await securityEventService.record({
+      userId: updatedUser.id,
+      type: "LOGIN_SUCCESS",
+    }).catch(() => {});
+
+    return {
+      user: this.toUserDto(updatedUser),
+      token: rawToken,
     };
   }
 }

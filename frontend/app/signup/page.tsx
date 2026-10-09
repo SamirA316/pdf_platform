@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,8 @@ import { CheckCircle2, AlertCircle, Eye, EyeOff } from "lucide-react";
 import { useDispatch } from "react-redux";
 import { login } from "@/store/slices/authSlice";
 import { Logo } from "@/components/shared/Logo";
-import { registerUser, verifyUserOtp } from "@/lib/api";
+import { registerUser, verifyUserOtp, getOAuthConfig, API_BASE_URL } from "@/lib/api";
+import { AccountChooserModal } from "@/components/auth/AccountChooserModal";
 
 export default function SignupPage() {
   const [formData, setFormData] = useState({ name: "", email: "", password: "", confirmPassword: "" });
@@ -20,11 +21,24 @@ export default function SignupPage() {
   const [otp, setOtp] = useState("");
   const [registeredEmail, setRegisteredEmail] = useState("");
 
+  const [accountChooserOpen, setAccountChooserOpen] = useState(false);
+  const [selectedSocialProvider, setSelectedSocialProvider] = useState<"Google" | "Apple" | "Facebook">("Google");
+  const [isSocialConfigured, setIsSocialConfigured] = useState(false);
+
   const dispatch = useDispatch();
   const router = useRouter();
 
   const [resendCooldown, setResendCooldown] = useState(0);
   const [resendSuccess, setResendSuccess] = useState("");
+
+  // Countdown timer for OTP resend cooldown
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setResendCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendCooldown]);
 
   const validate = () => {
     let isValid = true;
@@ -77,18 +91,15 @@ export default function SignupPage() {
       const { resendUserOtp } = await import("@/lib/api");
       const res = await resendUserOtp({ email: registeredEmail });
       setResendSuccess(res.message || "New verification code sent!");
-      setResendCooldown(60);
-      const timer = setInterval(() => {
-        setResendCooldown((prev) => {
-          if (prev <= 1) {
-            clearInterval(timer);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
+      setResendCooldown(res.cooldownSeconds || 60);
     } catch (err: any) {
-      setErrors((prev) => ({ ...prev, server: err?.message || "Failed to resend code." }));
+      const errMsg = err?.message || "Failed to resend code.";
+      setErrors((prev) => ({ ...prev, server: errMsg }));
+      // Sync cooldown if backend returned remaining wait time
+      const match = errMsg.match(/wait (\d+) seconds/i);
+      if (match && match[1]) {
+        setResendCooldown(parseInt(match[1], 10));
+      }
     }
   };
 
@@ -99,6 +110,9 @@ export default function SignupPage() {
       try {
         await registerUser({ name: formData.name, email: formData.email, password: formData.password });
         setRegisteredEmail(formData.email);
+        setOtp("");
+        setResendCooldown(60); // Start 60-second cooldown timer immediately
+        setResendSuccess("");
         setStep(2);
       } catch (err) {
         if (err instanceof Error) {
@@ -148,8 +162,87 @@ export default function SignupPage() {
     }
   };
 
-  const handleSocialLogin = (provider: string) => {
-    alert(`${provider} login is currently unavailable. Please use email and password.`);
+  // Listen for OAuth completion from popup window or 1-click email confirmation
+  useEffect(() => {
+    const handleAuthMessage = (event: MessageEvent) => {
+      if (event.data?.type === "OAUTH_SUCCESS") {
+        const { user, token } = event.data;
+        if (token) localStorage.setItem("pdf_session_token", token);
+        if (user) {
+          localStorage.setItem("pdf_user", JSON.stringify(user));
+          dispatch(login(user));
+        }
+        setAccountChooserOpen(false);
+        router.push("/");
+      }
+    };
+
+    window.addEventListener("message", handleAuthMessage);
+
+    let channel: BroadcastChannel | null = null;
+    try {
+      channel = new BroadcastChannel("quickpdf_auth");
+      channel.onmessage = (event) => {
+        if (event.data?.type === "OAUTH_SUCCESS") {
+          const { user, token } = event.data;
+          if (token) localStorage.setItem("pdf_session_token", token);
+          if (user) {
+            localStorage.setItem("pdf_user", JSON.stringify(user));
+            dispatch(login(user));
+          }
+          setAccountChooserOpen(false);
+          router.push("/");
+        }
+      };
+    } catch {
+      // Ignore
+    }
+
+    return () => {
+      window.removeEventListener("message", handleAuthMessage);
+      channel?.close();
+    };
+  }, [dispatch, router]);
+
+  const handleSocialLogin = async (provider: "Google" | "Apple" | "Facebook") => {
+    setSelectedSocialProvider(provider);
+
+    // Calculate center coordinates for popup window
+    const width = 560;
+    const height = 680;
+    const left = window.screenX + (window.outerWidth - width) / 2;
+    const top = window.screenY + (window.outerHeight - height) / 2;
+
+    let targetUrl = `/auth/google-chooser?provider=${provider.toLowerCase()}`;
+    try {
+      const config = await getOAuthConfig();
+      const configured =
+        provider === "Google"
+          ? config.googleConfigured
+          : provider === "Apple"
+          ? config.appleConfigured
+          : config.facebookConfigured;
+
+      setIsSocialConfigured(configured);
+
+      if (configured && provider === "Google") {
+        targetUrl = `${API_BASE_URL}/api/v1/auth/oauth/google?popup=1`;
+      }
+    } catch {
+      setIsSocialConfigured(false);
+    }
+
+    // Open authentic centered popup window
+    const popup = window.open(
+      targetUrl,
+      `${provider}SignIn`,
+      `width=${width},height=${height},left=${left},top=${top},status=no,toolbar=no,menubar=no,location=no,scrollbars=yes`
+    );
+
+    // Fallback if browser blocks popups
+    if (!popup || popup.closed || typeof popup.closed === "undefined") {
+      setAccountChooserOpen(true);
+    }
   };
 
   return (
@@ -398,9 +491,17 @@ export default function SignupPage() {
                   type="button"
                   onClick={handleResendOTP}
                   disabled={resendCooldown > 0 || loading}
-                  className="font-semibold text-[#E5322D] hover:underline disabled:text-slate-400 disabled:no-underline"
+                  className="font-semibold text-sm transition-colors disabled:cursor-not-allowed"
                 >
-                  {resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : "Resend code"}
+                  {resendCooldown > 0 ? (
+                    <span className="text-slate-400 font-medium select-none">
+                      Resend code in <span className="font-bold text-slate-600">{resendCooldown}s</span>
+                    </span>
+                  ) : (
+                    <span className="text-[#E5322D] hover:underline cursor-pointer">
+                      Resend code
+                    </span>
+                  )}
                 </button>
                 <button type="button" onClick={() => setStep(1)} className="font-semibold text-slate-500 hover:text-slate-800 transition-colors">
                   Wrong email? Go back
@@ -461,6 +562,14 @@ export default function SignupPage() {
           </p>
         </div>
       </div>
+
+      {/* Social Account Chooser Modal */}
+      <AccountChooserModal
+        isOpen={accountChooserOpen}
+        onClose={() => setAccountChooserOpen(false)}
+        provider={selectedSocialProvider}
+        isConfigured={isSocialConfigured}
+      />
     </div>
   );
 }
